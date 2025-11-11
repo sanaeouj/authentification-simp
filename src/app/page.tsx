@@ -1,65 +1,95 @@
-import Image from "next/image";
+import { redirect } from 'next/navigation'
+import { getCurrentUser, getUserRole } from '@/lib/utils/auth'
+import Link from 'next/link'
 
-export default function Home() {
+export default async function Home(): Promise<React.JSX.Element> {
+  // Vérifier si l'utilisateur est connecté
+  const user = await getCurrentUser()
+  
+  if (user) {
+    // Si l'utilisateur est connecté, rediriger vers le dashboard approprié
+    const role = await getUserRole()
+    
+    if (role === 'support' || role === 'admin') {
+      redirect('/admin/dashboard')
+    } else if (role === 'agent') {
+      redirect('/agent/dashboard')
+    } else {
+      redirect('/auth/login')
+    }
+  }
+
+  // Si l'utilisateur n'est pas connecté, afficher la page d'accueil
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-linear-to-br from-[#00C3D9]/10 via-white to-[#FF8A00]/10">
+      <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+        <div className="w-full max-w-4xl text-center">
+          {/* Logo et titre */}
+          <div className="mb-8">
+            <h1 className="text-5xl font-bold text-[#1D3B4E] sm:text-6xl">
+              Simplicom<span className="text-[#00C3D9]">Simplypay</span>
+            </h1>
+            <p className="mt-4 text-xl text-[#1D3B4E]/80">
+              Plateforme de gestion et d&apos;authentification
+            </p>
+          </div>
+
+          {/* Description avec glassmorphism */}
+          <div className="mb-12 rounded-2xl glass p-8 shadow-xl">
+            <p className="text-lg text-[#1D3B4E] leading-relaxed">
+              Bienvenue sur votre plateforme de gestion. Connectez-vous pour accéder à votre tableau de bord
+              et gérer vos clients, agents et liens magiques.
+            </p>
+          </div>
+
+          {/* Boutons d'action */}
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center justify-center rounded-lg bg-[#00C3D9] px-8 py-3 text-base font-medium text-white shadow-lg hover:bg-[#00A8BA] focus:outline-none focus:ring-2 focus:ring-[#00C3D9] focus:ring-offset-2 transition-all transform hover:scale-105"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Se connecter
+            </Link>
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center justify-center rounded-lg border-2 border-[#00C3D9] glass px-8 py-3 text-base font-medium text-[#1D3B4E] hover:bg-[#00C3D9]/10 focus:outline-none focus:ring-2 focus:ring-[#00C3D9] focus:ring-offset-2 transition-all"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              Accéder au tableau de bord
+            </Link>
+          </div>
+
+          {/* Fonctionnalités avec glassmorphism */}
+          <div className="mt-16 grid gap-8 sm:grid-cols-3">
+            <div className="rounded-2xl glass p-6 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="mb-4 text-4xl">👥</div>
+              <h3 className="mb-2 text-lg font-semibold text-[#1D3B4E]">
+                Gestion des Clients
+              </h3>
+              <p className="text-sm text-[#1D3B4E]/70">
+                Gérez vos clients et leurs informations de manière centralisée
+              </p>
+            </div>
+            <div className="rounded-2xl glass p-6 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="mb-4 text-4xl">🔗</div>
+              <h3 className="mb-2 text-lg font-semibold text-[#1D3B4E]">
+                Liens Magiques
+              </h3>
+              <p className="text-sm text-[#1D3B4E]/70">
+                Créez et gérez des liens d&apos;accès sécurisés pour vos formulaires
+              </p>
+            </div>
+            <div className="rounded-2xl glass p-6 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="mb-4 text-4xl">📊</div>
+              <h3 className="mb-2 text-lg font-semibold text-[#1D3B4E]">
+                Tableaux de Bord
+              </h3>
+              <p className="text-sm text-[#1D3B4E]/70">
+                Visualisez vos statistiques et suivez vos activités
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
     </div>
-  );
+  )
 }
