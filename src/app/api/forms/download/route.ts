@@ -85,13 +85,46 @@ const wrapLine = (text: string, maxWidth: number, font: any, size: number): stri
   let current = ''
 
   words.forEach(word => {
-    const tentative = current ? `${current} ${word}` : word
-    const width = font.widthOfTextAtSize(tentative, size)
-    if (width <= maxWidth) {
-      current = tentative
+    // Vérifier si le mot seul dépasse la largeur
+    const wordWidth = font.widthOfTextAtSize(word, size)
+    if (wordWidth > maxWidth) {
+      // Si le mot est trop long, le couper caractère par caractère
+      if (current) {
+        lines.push(current)
+        current = ''
+      }
+      // Couper le mot en plusieurs parties
+      let remainingWord = word
+      while (remainingWord.length > 0) {
+        let charCount = 1
+        let segment = remainingWord.substring(0, charCount)
+        let segmentWidth = font.widthOfTextAtSize(segment, size)
+        
+        // Trouver le nombre maximum de caractères qui tiennent dans maxWidth
+        while (charCount < remainingWord.length && segmentWidth < maxWidth) {
+          charCount++
+          segment = remainingWord.substring(0, charCount)
+          segmentWidth = font.widthOfTextAtSize(segment, size)
+        }
+        
+        // Si on a dépassé, revenir en arrière d'un caractère
+        if (segmentWidth > maxWidth && charCount > 1) {
+          charCount--
+          segment = remainingWord.substring(0, charCount)
+        }
+        
+        lines.push(segment)
+        remainingWord = remainingWord.substring(charCount)
+      }
     } else {
-      if (current) lines.push(current)
-      current = word
+      const tentative = current ? `${current} ${word}` : word
+      const width = font.widthOfTextAtSize(tentative, size)
+      if (width <= maxWidth) {
+        current = tentative
+      } else {
+        if (current) lines.push(current)
+        current = word
+      }
     }
   })
 
@@ -141,16 +174,17 @@ const drawDivider = (
   page: ReturnType<PDFDocument['addPage']>,
   positionY: number,
   margin: number,
-  color = rgb(0, 0.76, 0.85)
+  color = rgb(0, 0.76, 0.85),
+  width?: number
 ) => {
-  const width = page.getWidth() - margin * 2
+  const dividerWidth = width ?? (page.getWidth() - margin * 2)
   page.drawRectangle({
     x: margin,
     y: positionY,
-    width,
-    height: 2,
+    width: dividerWidth,
+    height: 1.5, // Épaisseur harmonisée
     color,
-    opacity: 0.3,
+    opacity: 0.35, // Légèrement plus visible
   })
 }
 
@@ -185,10 +219,13 @@ const appendPortabilityLetter = ({
   clientInfo,
   formData,
 }: PortabilityLetterPayload) => {
-  const page = pdfDoc.addPage()
+  // Utiliser les mêmes dimensions en paysage que le reste du document
+  const LANDSCAPE_WIDTH = 792
+  const LANDSCAPE_HEIGHT = 612
+  const page = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
   const { width, height } = page.getSize()
-  const margin = 48
-  const lineHeight = 16
+  const margin = 40 // Réduit de 48 à 40 pour correspondre aux autres marges
+  const lineHeight = 12 // Réduit de 16 à 12
   const textColor = rgb(0.06, 0.15, 0.25)
 
   const drawCentered = (text: string, y: number, size: number, font = boldFont) => {
@@ -206,7 +243,7 @@ const appendPortabilityLetter = ({
     page.drawText(label, {
       x: margin,
       y,
-      size: 11,
+      size: 9, // Réduit de 11 à 9
       font: boldFont,
       color: textColor,
     })
@@ -221,13 +258,13 @@ const appendPortabilityLetter = ({
     page.drawText(value, {
       x: margin + 4,
       y: y - lineHeight + 2,
-      size: 11,
+      size: 9, // Réduit de 11 à 9
       font: regularFont,
       color: textColor,
     })
   }
 
-  const topBandHeight = 54
+  const topBandHeight = 45 // Réduit de 54 à 45
   page.drawRectangle({
     x: 0,
     y: height - topBandHeight,
@@ -236,7 +273,9 @@ const appendPortabilityLetter = ({
     color: rgb(0.8, 0.85, 0.95),
   })
 
-  drawCentered('LETTRE D’AUTORISATION', height - topBandHeight / 2 - 4, 18)
+  // Construire le titre en concaténant pour éviter les problèmes d'apostrophe typographique
+  const letterTitle = 'LETTRE D' + String.fromCharCode(39) + 'AUTORISATION'
+  drawCentered(letterTitle, height - topBandHeight / 2 - 4, 14) // Réduit de 18 à 14
   drawLabelValue(
     "Nom de l’entreprise :",
     (clientInfo?.company ?? clientInfo?.full_name ?? '') || '________________________________________',
@@ -255,7 +294,7 @@ const appendPortabilityLetter = ({
     page.drawText(line, {
       x: margin,
       y: bodyTextY - index * (lineHeight + 2),
-      size: 11,
+      size: 9, // Réduit de 11 à 9
       font: regularFont,
       color: textColor,
     })
@@ -283,21 +322,21 @@ const appendPortabilityLetter = ({
     page.drawText(entry.label, {
       x: margin + 6,
       y,
-      size: 10.5,
+      size: 9, // Réduit de 10.5 à 9
       font: boldFont,
       color: textColor,
     })
     page.drawText(String(entry.value || ''), {
       x: margin + 6,
       y: y - lineHeight + 4,
-      size: 10.5,
+      size: 9, // Réduit de 10.5 à 9
       font: regularFont,
       color: textColor,
     })
   })
 
   const tableTop = infoBoxY - infoBoxHeight - 28
-  const rowHeight = 22
+  const rowHeight = 18 // Réduit de 22 à 18
   const tableHeight = rowHeight * 11
   const tableWidth = width - margin * 2
   const numberColumnWidth = tableWidth * 0.6
@@ -321,15 +360,15 @@ const appendPortabilityLetter = ({
 
   page.drawText('NUMÉROS À TRANSFÉRER', {
     x: margin + 10,
-    y: tableTop - rowHeight + 6,
-    size: 11,
+    y: tableTop - rowHeight + 5, // Ajusté pour la nouvelle hauteur
+    size: 9, // Réduit de 11 à 9
     font: boldFont,
     color: textColor,
   })
   page.drawText('FOURNISSEUR', {
     x: margin + numberColumnWidth + 10,
-    y: tableTop - rowHeight + 6,
-    size: 11,
+    y: tableTop - rowHeight + 5, // Ajusté pour la nouvelle hauteur
+    size: 9, // Réduit de 11 à 9
     font: boldFont,
     color: textColor,
   })
@@ -347,8 +386,8 @@ const appendPortabilityLetter = ({
 
     page.drawText(`${i + 1}e numéro :`, {
       x: margin + 8,
-      y: y + 6,
-      size: 10.5,
+      y: y + 4,
+      size: 9,
       font: regularFont,
       color: textColor,
     })
@@ -356,22 +395,22 @@ const appendPortabilityLetter = ({
     const numberValue = numbers[i] ?? ''
     page.drawText(numberValue, {
       x: margin + 110,
-      y: y + 6,
-      size: 10.5,
+      y: y + 4,
+      size: 9,
       font: regularFont,
       color: textColor,
     })
 
     page.drawText('__________________________', {
       x: margin + numberColumnWidth + 12,
-      y: y + 6,
-      size: 10.5,
+      y: y + 4,
+      size: 9,
       font: regularFont,
       color: textColor,
     })
   }
 
-  const footerY = tableTop - tableHeight - 48
+  const footerY = tableTop - tableHeight - 40
   const returnLines = [
     'Veuillez retourner ce formulaire dûment rempli à :',
     'Simplicom',
@@ -380,11 +419,11 @@ const appendPortabilityLetter = ({
   ]
 
   returnLines.forEach((line, idx) => {
-    drawCentered(line, footerY - idx * (lineHeight + 2), 10.5, regularFont)
+    drawCentered(line, footerY - idx * (lineHeight + 2), 9, regularFont)
   })
 
   const bottomText = 'Télécommunications Simplicom · 1.844.303.1300'
-  drawCentered(bottomText, footerY - returnLines.length * (lineHeight + 2) - 6, 11, boldFont)
+  drawCentered(bottomText, footerY - returnLines.length * (lineHeight + 2) - 6, 10, boldFont)
 }
 export async function GET(request: NextRequest) {
   try {
@@ -533,20 +572,49 @@ export async function GET(request: NextRequest) {
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-    const headerHeight = 72
-    const sideMargin = 60
-    const bottomMargin = 60
-    const baseLineGap = 6
+    // Dimensions en paysage (landscape): largeur > hauteur
+    const LANDSCAPE_WIDTH = 792 // 11 pouces
+    const LANDSCAPE_HEIGHT = 612 // 8.5 pouces
+
+    // Marges et espacements harmonisés
+    const headerHeight = 55
+    const sideMargin = 45
+    const bottomMargin = 45
+    const topMargin = 25 // Marge après l'en-tête
+    const baseLineGap = 3
     const textColor = rgb(0.09, 0.19, 0.28)
     const accentColor = rgb(0.06, 0.35, 0.49)
+    const borderWidth = 0.6 // Épaisseur de bordure standardisée
 
     type PageContext = {
       page: ReturnType<PDFDocument['addPage']>
-      cursorY: number
+      cursorYLeft: number
+      cursorYRight: number
+      currentColumn: 'left' | 'right'
     }
 
+    // Calcul des dimensions des colonnes (2 colonnes avec espace entre)
+    const getColumnLayout = () => {
+      const pageWidth = LANDSCAPE_WIDTH
+      const totalMargins = sideMargin * 2
+      const columnGap = 25 // Espace entre les 2 colonnes (augmenté)
+      const availableWidth = pageWidth - totalMargins - columnGap
+      const columnWidth = availableWidth / 2
+      const leftColumnX = sideMargin
+      const rightColumnX = sideMargin + columnWidth + columnGap
+      
+      return {
+        columnWidth,
+        leftColumnX,
+        rightColumnX,
+        columnGap,
+      }
+    }
+
+    const columnLayout = getColumnLayout()
+
     const startNewPage = (): PageContext => {
-      const newPage = pdfDoc.addPage()
+      const newPage = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
       const { width, height } = newPage.getSize()
 
       newPage.drawRectangle({
@@ -559,36 +627,87 @@ export async function GET(request: NextRequest) {
       })
 
       const headerTitle = 'Dossier de Configuration Client'
-      const headerWidth = boldFont.widthOfTextAtSize(headerTitle, 22)
+      const headerSize = 18 // Réduit de 22 à 18
+      const headerWidth = boldFont.widthOfTextAtSize(headerTitle, headerSize)
       newPage.drawText(headerTitle, {
         x: (width - headerWidth) / 2,
-        y: height - headerHeight + 18,
-        size: 22,
+        y: height - headerHeight + 12,
+        size: headerSize,
         font: boldFont,
         color: rgb(1, 1, 1),
       })
 
+      // Dessiner une ligne de séparation entre les colonnes
+      const separatorY = height - headerHeight - topMargin
+      newPage.drawLine({
+        start: { x: sideMargin + columnLayout.columnWidth + columnLayout.columnGap / 2, y: bottomMargin },
+        end: { x: sideMargin + columnLayout.columnWidth + columnLayout.columnGap / 2, y: separatorY },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+        opacity: 0.5,
+      })
+
       return {
         page: newPage,
-        cursorY: height - headerHeight - 32,
+        cursorYLeft: height - headerHeight - topMargin,
+        cursorYRight: height - headerHeight - topMargin,
+        currentColumn: 'left',
       }
     }
 
     let context = startNewPage()
 
-    const availableWidth = () => context.page.getWidth() - sideMargin * 2
+    const availableWidth = () => columnLayout.columnWidth
     const lineHeight = (size: number) => size + baseLineGap
 
-    const ensureSpace = (requiredHeight: number) => {
-      if (context.cursorY - requiredHeight < bottomMargin) {
+    const ensureSpace = (requiredHeight: number, column?: 'left' | 'right') => {
+      const currentCol = column ?? context.currentColumn
+      const currentY = currentCol === 'left' ? context.cursorYLeft : context.cursorYRight
+      
+      if (currentY - requiredHeight < bottomMargin) {
+        // Essayer de passer à l'autre colonne
+        if (currentCol === 'left') {
+          const rightColY = context.cursorYRight
+          if (rightColY - requiredHeight >= bottomMargin) {
+            context.currentColumn = 'right'
+            return
+          }
+        } else {
+          const leftColYCheck = context.cursorYLeft
+          if (leftColYCheck - requiredHeight >= bottomMargin) {
+            context.currentColumn = 'left'
+            return
+          }
+        }
+        // Si aucune colonne n'a assez d'espace, créer une nouvelle page
         context = startNewPage()
+      }
+    }
+
+    const getCurrentX = () => {
+      return context.currentColumn === 'left' 
+        ? columnLayout.leftColumnX 
+        : columnLayout.rightColumnX
+    }
+
+    const getCurrentY = () => {
+      return context.currentColumn === 'left' 
+        ? context.cursorYLeft 
+        : context.cursorYRight
+    }
+
+    const setCurrentY = (y: number) => {
+      if (context.currentColumn === 'left') {
+        context.cursorYLeft = y
+      } else {
+        context.cursorYRight = y
       }
     }
 
     const wrapMultiline = (
       text: string,
       font = regularFont,
-      size = 11,
+      size = 9, // Réduit de 11 à 9 par défaut
       width = availableWidth()
     ): string[] => {
       return text
@@ -602,73 +721,149 @@ export async function GET(request: NextRequest) {
       text: string,
       {
         font = regularFont,
-        size = 11,
+        size = 9, // Réduit de 11 à 9 par défaut
         indent = 0,
         color = textColor,
         spacing = lineHeight(size),
+        column,
       }: {
         font?: typeof regularFont
         size?: number
         indent?: number
         color?: ReturnType<typeof rgb>
         spacing?: number
+        column?: 'left' | 'right'
       } = {}
     ) => {
-      const lines = wrapMultiline(text, font, size, availableWidth() - indent)
+      if (column) context.currentColumn = column
+      // Largeur disponible pour le texte (largeur de colonne - indentation)
+      const textWidth = availableWidth() - indent
+      const lines = wrapMultiline(text, font, size, textWidth)
       if (lines.length === 0) return
-      ensureSpace(lines.length * spacing)
+      ensureSpace(lines.length * spacing, context.currentColumn)
+      
+      const x = getCurrentX() + indent
+      let y = getCurrentY()
+      
       lines.forEach(line => {
-        context.page.drawText(line, {
-          x: sideMargin + indent,
-          y: context.cursorY,
+        // Vérifier que la ligne ne dépasse pas la largeur disponible
+        const lineWidth = font.widthOfTextAtSize(line, size)
+        let displayLine = line
+        
+        // Si la ligne dépasse, la tronquer (sécurité supplémentaire)
+        if (lineWidth > textWidth) {
+          let truncatedLine = line
+          while (font.widthOfTextAtSize(truncatedLine, size) > textWidth && truncatedLine.length > 0) {
+            truncatedLine = truncatedLine.substring(0, truncatedLine.length - 1)
+          }
+          displayLine = truncatedLine
+        }
+        
+        context.page.drawText(displayLine, {
+          x,
+          y,
           size,
           font,
           color,
         })
-        context.cursorY -= spacing
+        y -= spacing
       })
+      
+      setCurrentY(y)
     }
 
-    const drawAnswerBox = (content: string[]) => {
-      const normalized = content.length ? content : ['Non renseigné']
-      const wrapped = normalized.flatMap(line => wrapMultiline(line, regularFont, 11, availableWidth() - 28))
+    const drawAnswerBox = (content: string[], column?: 'left' | 'right') => {
+      // Ne rien dessiner si le contenu est vide
+      if (content.length === 0) return
+      if (column) context.currentColumn = column
+      
+      const fontSize = 9
+      const paddingTop = 14 // Padding interne supérieur
+      const paddingBottom = 14 // Padding interne inférieur
+      const horizontalPadding = 12 // Padding interne horizontal
+      const marginBefore = 10 // Marge externe avant la boîte
+      const marginAfter = 10 // Marge externe après la boîte
+      
+      // Largeur disponible pour le texte (largeur de colonne - padding gauche et droite)
+      const textWidth = availableWidth() - (horizontalPadding * 2)
+      const wrapped = content.flatMap(line => wrapMultiline(line, regularFont, fontSize, textWidth))
 
-      const boxHeight = wrapped.length * lineHeight(11) + 24
-      ensureSpace(boxHeight + 12)
+      const boxHeight = wrapped.length * lineHeight(fontSize) + paddingTop + paddingBottom
+      ensureSpace(boxHeight + marginBefore + marginAfter, context.currentColumn)
 
-      const top = context.cursorY
+      const x = getCurrentX()
+      const top = getCurrentY() - marginBefore // Espace avant la boîte
+      const boxWidth = availableWidth()
+      
       context.page.drawRectangle({
-        x: sideMargin,
+        x,
         y: top - boxHeight,
-        width: availableWidth(),
+        width: boxWidth,
         height: boxHeight,
         color: rgb(0.97, 0.99, 1),
         borderColor: rgb(0, 0.58, 0.69),
-        borderWidth: 1,
+        borderWidth: borderWidth, // Utilise la bordure standardisée
         opacity: 0.98,
       })
 
-      let textY = top - 18
+      // S'assurer que le texte reste dans les limites
+      let textY = top - paddingTop
+      const textStartX = x + horizontalPadding
+      const maxTextX = x + boxWidth - horizontalPadding
+      
       wrapped.forEach(line => {
-        context.page.drawText(line, {
-          x: sideMargin + 14,
-          y: textY,
-          size: 11,
-          font: regularFont,
-          color: textColor,
-        })
-        textY -= lineHeight(11)
+        // Vérifier que la ligne ne dépasse pas la largeur disponible
+        const lineWidth = regularFont.widthOfTextAtSize(line, fontSize)
+        let textX = textStartX
+        
+        // Si la ligne dépasse, la tronquer visuellement (ne devrait pas arriver avec wrapLine amélioré)
+        if (lineWidth > textWidth) {
+          // Tronquer la ligne pour qu'elle tienne
+          let truncatedLine = line
+          while (regularFont.widthOfTextAtSize(truncatedLine, fontSize) > textWidth && truncatedLine.length > 0) {
+            truncatedLine = truncatedLine.substring(0, truncatedLine.length - 1)
+          }
+          context.page.drawText(truncatedLine, {
+            x: textX,
+            y: textY,
+            size: fontSize,
+            font: regularFont,
+            color: textColor,
+          })
+        } else {
+          context.page.drawText(line, {
+            x: textX,
+            y: textY,
+            size: fontSize,
+            font: regularFont,
+            color: textColor,
+          })
+        }
+        textY -= lineHeight(fontSize)
       })
 
-      context.cursorY = top - boxHeight - 18
+      setCurrentY(top - boxHeight - marginAfter) // Marge après la boîte
     }
 
-    const drawSectionHeading = (title: string) => {
-      ensureSpace(40)
-      drawDivider(pdfDoc, context.page, context.cursorY + 6, sideMargin, rgb(0, 0.7, 0.82))
-      context.cursorY -= 12
-      drawParagraph(title, { font: boldFont, size: 16, color: accentColor })
-      context.cursorY -= 8
+    const drawSectionHeading = (title: string, column?: 'left' | 'right') => {
+      if (column) context.currentColumn = column
+      const marginBefore = 15 // Marge avant la section
+      const marginAfterTitle = 12 // Marge après le titre
+      const marginBetweenLineAndTitle = 10 // Marge entre la ligne et le titre
+      const requiredSpace = 35 + marginBefore + marginAfterTitle
+      ensureSpace(requiredSpace, context.currentColumn)
+      
+      const x = getCurrentX()
+      const y = getCurrentY() - marginBefore // Marge avant la ligne
+      
+      // Dessiner un diviseur pour la colonne actuelle seulement
+      const colWidth = availableWidth()
+      drawDivider(pdfDoc, context.page, y, x, rgb(0, 0.7, 0.82), colWidth)
+      
+      setCurrentY(y - marginBetweenLineAndTitle) // Marge entre la ligne et le titre
+      drawParagraph(title, { font: boldFont, size: 12, color: accentColor, column: context.currentColumn })
+      const currentY = getCurrentY()
+      setCurrentY(currentY - marginAfterTitle) // Marge après le titre
     }
 
     const formatPrimitive = (value: unknown): string => {
@@ -679,14 +874,23 @@ export async function GET(request: NextRequest) {
       return String(value)
     }
 
+    const isEmptyValue = (value: unknown): boolean => {
+      if (value === null || value === undefined) return true
+      if (typeof value === 'string' && value.trim() === '') return true
+      if (Array.isArray(value) && value.length === 0) return true
+      if (typeof value === 'object' && Object.keys(value).length === 0) return true
+      return false
+    }
+
     const normalizeAnswer = (value: unknown, depth = 0): string[] => {
       const indent = '  '.repeat(depth)
 
-      if (value === null || value === undefined) return []
+      if (isEmptyValue(value)) return []
 
       if (Array.isArray(value)) {
         if (value.length === 0) return []
         return value.flatMap((item, index) => {
+          if (isEmptyValue(item)) return []
           const lines = normalizeAnswer(item, depth + 1)
           if (typeof item === 'object' && item !== null) {
             return [`${indent}• Élément ${index + 1}`, ...lines.map(line => `${'  '.repeat(depth + 1)}${line}`)]
@@ -699,66 +903,102 @@ export async function GET(request: NextRequest) {
         const entries = Object.entries(value as Record<string, unknown>)
         if (!entries.length) return []
         return entries.flatMap(([key, val]) => {
+          if (isEmptyValue(val)) return []
           const label = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
           const child = normalizeAnswer(val, depth + 1)
           if (!child.length) {
-            return [`${indent}${label} : ${formatPrimitive(val)}`]
+            const primitive = formatPrimitive(val)
+            if (isEmptyValue(primitive) || primitive === 'Non renseigné') return []
+            return [`${indent}${label} : ${primitive}`]
           }
           return [`${indent}${label} :`, ...child.map(line => `${'  '.repeat(depth + 1)}${line}`)]
         })
       }
 
-      return formatPrimitive(value)
+      const formatted = formatPrimitive(value)
+      if (isEmptyValue(formatted) || formatted === 'Non renseigné') return []
+
+      return formatted
         .split(/\r?\n/)
+        .filter(line => line.trim() !== '')
         .map(line => `${indent}${line}`)
     }
 
     let questionIndex = 1
-    const drawQuestionBlock = (label: string, answer: unknown) => {
+    const drawQuestionBlock = (label: string, answer: unknown, column?: 'left' | 'right') => {
+      // Si la réponse est null/undefined, ne pas afficher
+      if (answer === null || answer === undefined) return
+      const normalized = normalizeAnswer(answer)
+      // Ne pas afficher si la réponse est vide après normalisation
+      if (normalized.length === 0) return
+      if (column) context.currentColumn = column
       const number = questionIndex++
-      drawParagraph(`${number}. ${label}`, { font: boldFont, size: 12, color: textColor })
-      drawAnswerBox(normalizeAnswer(answer))
+      const questionMargin = 6 // Marge avant la question
+      const currentY = getCurrentY()
+      setCurrentY(currentY - questionMargin)
+      drawParagraph(`${number}. ${label}`, { font: boldFont, size: 10, color: textColor, column: context.currentColumn })
+      drawAnswerBox(normalized, context.currentColumn)
     }
 
-    const drawExplicitQuestion = (number: string, label: string, answer: unknown) => {
-      drawParagraph(`${number}. ${label}`, { font: boldFont, size: 12, color: textColor })
-      drawAnswerBox(normalizeAnswer(answer))
+    const drawExplicitQuestion = (number: string, label: string, answer: unknown, column?: 'left' | 'right') => {
+      // Si la réponse est null/undefined, ne pas afficher
+      if (answer === null || answer === undefined) return
+      const normalized = normalizeAnswer(answer)
+      // Ne pas afficher si la réponse est vide après normalisation
+      if (normalized.length === 0) return
+      if (column) context.currentColumn = column
+      const questionMargin = 6 // Marge avant la question
+      const currentY = getCurrentY()
+      setCurrentY(currentY - questionMargin)
+      drawParagraph(`${number}. ${label}`, { font: boldFont, size: 10, color: textColor, column: context.currentColumn })
+      drawAnswerBox(normalized, context.currentColumn)
     }
 
-    const mapChoice = (value: string | null | undefined, mapping: Record<string, string>): string => {
-      if (!value) return 'Non renseigné'
-      return mapping[value] ?? 'Non renseigné'
+    const mapChoice = (value: string | null | undefined, mapping: Record<string, string>): string | null => {
+      if (!value) return null
+      const mapped = mapping[value]
+      return mapped ?? null
     }
 
-    drawSectionHeading('Résumé')
-    drawParagraph(`Exporté le : ${new Date().toLocaleString('fr-FR')}`)
-    drawParagraph(`Exporté par : ${profile.full_name ?? profile.email ?? 'Utilisateur'}`)
-    drawParagraph(`Rôle : ${role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : role}`)
-    drawParagraph(`Client : ${clientInfo?.full_name ?? 'Non renseigné'}`)
-    drawParagraph(`Email : ${clientInfo?.email ?? 'Non renseigné'}`)
-    drawParagraph(`Téléphone : ${clientInfo?.phone ?? 'Non renseigné'}`)
-    drawParagraph(`Société : ${clientInfo?.company ?? 'Non renseignée'}`)
-    drawParagraph(`Soumission ID : ${submission.id}`)
+    // Section Résumé organisée en 2 colonnes
+    drawSectionHeading('Résumé', 'left')
+    drawParagraph(`Exporté le : ${new Date().toLocaleString('fr-FR')}`, { column: 'left' })
+    drawParagraph(`Exporté par : ${profile.full_name ?? profile.email ?? 'Utilisateur'}`, { column: 'left' })
+    drawParagraph(`Rôle : ${role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : role}`, { column: 'left' })
+    drawParagraph(`Client : ${clientInfo?.full_name ?? 'Non renseigné'}`, { column: 'left' })
+    
+    // Passer à la colonne droite
+    context.currentColumn = 'right'
+    drawParagraph(`Email : ${clientInfo?.email ?? 'Non renseigné'}`, { column: 'right' })
+    drawParagraph(`Téléphone : ${clientInfo?.phone ?? 'Non renseigné'}`, { column: 'right' })
+    drawParagraph(`Société : ${clientInfo?.company ?? 'Non renseignée'}`, { column: 'right' })
+    drawParagraph(`Soumission ID : ${submission.id}`, { column: 'right' })
     drawParagraph(
       `Soumis le : ${
         submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('fr-FR') : 'Non renseigné'
-      }`
+      }`,
+      { column: 'right' }
     )
     if (submission.processed_at) {
-      drawParagraph(`Traité le : ${new Date(submission.processed_at).toLocaleString('fr-FR')}`)
+      drawParagraph(`Traité le : ${new Date(submission.processed_at).toLocaleString('fr-FR')}`, { column: 'right' })
     }
-    context.cursorY -= 12
-
-    drawSectionHeading('Informations transmises par l’agent')
+    
+    // Organiser le contenu en alternant entre les colonnes gauche et droite
+    drawSectionHeading('Informations transmises par l' + String.fromCharCode(39) + 'agent', 'left')
     if (agentFormData) {
       if (typeof agentFormData.generated_at === 'string') {
         drawParagraph(`Dernière mise à jour : ${new Date(agentFormData.generated_at).toLocaleString('fr-FR')}`, {
           font: boldFont,
+          column: 'left',
         })
-        context.cursorY -= 4
+        const leftYUpdate = context.cursorYLeft
+        setCurrentY(leftYUpdate - 4)
       }
       drawExplicitQuestion('A1', 'Fournisseur VOIP', agentFormData.voip_provider ?? 'Non renseigné')
       drawExplicitQuestion('A2', 'Numéro / Offre', agentFormData.voip_number ?? 'Non renseigné')
+      
+      // Passer à la colonne droite après quelques questions
+      context.currentColumn = 'right'
       drawExplicitQuestion('A3', 'Configuration / Détails des prix', agentFormData.price_configuration ?? 'Non renseigné')
       drawExplicitQuestion(
         'A4',
@@ -767,108 +1007,147 @@ export async function GET(request: NextRequest) {
           ? `${agentFormData.expires_in_days} jour(s)`
           : 'Non renseigné'
       )
-      drawExplicitQuestion('A5', 'Observations de l’agent', agentFormData.additional_notes ?? 'Non renseigné')
+      drawExplicitQuestion('A5', 'Observations de l' + String.fromCharCode(39) + 'agent', agentFormData.additional_notes ?? 'Non renseigné')
     } else {
-      drawParagraph('Aucune information agent disponible.')
+      drawParagraph('Aucune information agent disponible.', { column: 'left' })
     }
 
     if (agentRawNotes) {
-      context.cursorY -= 8
+      const rightYUpdate = context.cursorYRight
+      setCurrentY(rightYUpdate - 8)
       drawExplicitQuestion('A6', 'Notes complémentaires', agentRawNotes)
     }
 
-    context.cursorY -= 12
+    // Réinitialiser à la colonne gauche pour la suite
+    context.currentColumn = 'left'
+    const leftYReset = context.cursorYLeft
+    const rightYReset = context.cursorYRight
+    // Utiliser la plus basse des deux colonnes pour continuer
+    const minY = Math.min(leftYReset, rightYReset)
+    setCurrentY(minY - 12)
 
     const formData = (submission.data ?? {}) as Record<string, unknown>
 
-    drawSectionHeading('Informations de facturation')
-    drawQuestionBlock('Nom de la compagnie *', formData.billing_company_name)
-    drawQuestionBlock('Nom et prénom de la personne ressource *', formData.billing_contact_name)
-    drawQuestionBlock('Numéro de téléphone de la personne ressource *', formData.billing_contact_phone)
-    drawQuestionBlock('Adresse courriel *', formData.billing_contact_email)
-    drawQuestionBlock('Adresse de facturation *', formData.billing_address)
-
-    drawSectionHeading('Numéros de téléphone (DID, FAX et 1-800)')
-    drawQuestionBlock(
-      'Souhaitez-vous activer de nouveaux numéros ? *',
-      mapChoice(formData.phone_numbers_choice as string | undefined, {
-        keep: 'Conserver mes numéros actuels',
-        new: 'Activer de nouveaux numéros',
-      })
-    )
-    drawQuestionBlock(
-      'Numéros à conserver et transférer *',
-      formData.phone_numbers_to_keep
-    )
-
-    drawSectionHeading('Adresses de service')
-    drawQuestionBlock(
-      'Adresse complète pour le service 911 *',
-      formData.emergency_service_address
-    )
-    drawQuestionBlock(
-      'Affichage sortant des postes *',
-      formData.outgoing_display_name
-    )
-
-    drawSectionHeading('Téléphones de bureau IP')
-    drawQuestionBlock(
-      'Stratégie pour les appareils téléphoniques *',
-      mapChoice(formData.ip_phone_choice as string | undefined, {
-        keep: 'Je veux conserver mes appareils téléphoniques IP',
-        buy: 'Je vais acheter de nouveaux appareils (facture d’ouverture payée)',
-        virtual: 'Je vais utiliser une solution 100% virtuelle',
-      })
-    )
-
-    drawSectionHeading('Configuration des postes téléphoniques')
-    drawQuestionBlock('Nombre de postes à configurer *', formData.posts_count)
-
-    const postConfigs = Array.isArray(formData.post_configurations)
-      ? (formData.post_configurations as Record<string, unknown>[])
-      : []
-    if (postConfigs.length) {
-      postConfigs.forEach((post, index) => {
-        const label = typeof post.label === 'string' && post.label.trim() ? post.label : `Poste ${index + 1}`
-        const lines = [
-          `Téléphone virtuel sur cellulaire : ${post.virtualMobile ? 'Oui' : 'Non'}`,
-          `Boîte vocale vers courriel : ${post.voicemailToMail ? 'Oui' : 'Non'}`,
-        ]
-        drawExplicitQuestion(`P${index + 1}`, label, lines)
-      })
+    // Fonction pour alterner automatiquement entre les colonnes
+    const alternateColumn = () => {
+      const leftColY = context.cursorYLeft
+      const rightColY = context.cursorYRight
+      // Choisir la colonne avec le plus d'espace disponible
+      context.currentColumn = leftColY > rightColY ? 'left' : 'right'
     }
 
-    drawSectionHeading('Informations sur les collaborateurs')
-    drawQuestionBlock(
-      'Noms, prénoms et extensions *',
-      formData.collaborators_identification
-    )
-    drawQuestionBlock(
-      'Courriels et numéros par extension *',
-      formData.collaborators_contacts
-    )
+    // ============================================
+    // ORGANISATION DU FORMULAIRE EN SECTIONS LOGIQUES
+    // ============================================
+    
+    // SECTION 1: INFORMATIONS DE FACTURATION
+    const hasBillingInfo = formData.billing_company_name || formData.billing_contact_name || 
+                           formData.billing_contact_phone || formData.billing_contact_email || 
+                           formData.billing_address
+    if (hasBillingInfo) {
+      alternateColumn()
+      drawSectionHeading('Informations de facturation', context.currentColumn)
+      drawQuestionBlock('Nom de la compagnie *', formData.billing_company_name)
+      drawQuestionBlock('Nom et prénom de la personne ressource *', formData.billing_contact_name)
+      alternateColumn()
+      drawQuestionBlock('Numéro de téléphone de la personne ressource *', formData.billing_contact_phone)
+      drawQuestionBlock('Adresse courriel *', formData.billing_contact_email)
+      alternateColumn()
+      drawQuestionBlock('Adresse de facturation *', formData.billing_address)
+    }
 
-    drawSectionHeading('Menu d’entreprise')
-    drawQuestionBlock(
-      'Souhaitez-vous intégrer un menu d’entreprise ? *',
-      mapChoice(formData.include_company_menu as string | undefined, {
-        fr: 'Oui, en français uniquement',
-        en: 'Oui, en anglais uniquement',
-        both: 'Oui, en français et en anglais',
-        none: 'Non, je ne souhaite pas intégrer de menu',
-      })
-    )
-    drawQuestionBlock(
-      'Script du menu en français',
-      formData.french_menu_script
-    )
-    drawQuestionBlock(
-      'Script du menu en anglais',
-      formData.english_menu_script
-    )
+    // SECTION 2: NUMÉROS DE TÉLÉPHONE
+    const phoneChoice = mapChoice(formData.phone_numbers_choice as string | undefined, {
+      keep: 'Conserver mes numéros actuels',
+      new: 'Activer de nouveaux numéros',
+    })
+    if (phoneChoice || formData.phone_numbers_to_keep) {
+      alternateColumn()
+      drawSectionHeading('Numéros de téléphone (DID, FAX et 1-800)', context.currentColumn)
+      drawQuestionBlock('Souhaitez-vous activer de nouveaux numéros ? *', phoneChoice)
+      alternateColumn()
+      drawQuestionBlock('Numéros à conserver et transférer *', formData.phone_numbers_to_keep)
+    }
+
+    // SECTION 3: ADRESSES DE SERVICE
+    if (formData.emergency_service_address || formData.outgoing_display_name) {
+      alternateColumn()
+      drawSectionHeading('Adresses de service', context.currentColumn)
+      drawQuestionBlock('Adresse complète pour le service 911 *', formData.emergency_service_address)
+      alternateColumn()
+      drawQuestionBlock('Affichage sortant des postes *', formData.outgoing_display_name)
+    }
+
+    // SECTION 4: TÉLÉPHONES DE BUREAU IP
+    const ipPhoneChoice = mapChoice(formData.ip_phone_choice as string | undefined, {
+      keep: 'Je veux conserver mes appareils téléphoniques IP',
+      buy: 'Je vais acheter de nouveaux appareils (facture d' + String.fromCharCode(39) + 'ouverture payée)',
+      virtual: 'Je vais utiliser une solution 100% virtuelle',
+    })
+    if (ipPhoneChoice) {
+      alternateColumn()
+      drawSectionHeading('Téléphones de bureau IP', context.currentColumn)
+      drawQuestionBlock('Stratégie pour les appareils téléphoniques *', ipPhoneChoice)
+    }
+
+    // SECTION 5: CONFIGURATION DES POSTES TÉLÉPHONIQUES
+    if (formData.posts_count && Number(formData.posts_count) > 0) {
+      alternateColumn()
+      drawSectionHeading('Configuration des postes téléphoniques', context.currentColumn)
+      drawQuestionBlock('Nombre de postes à configurer *', formData.posts_count)
+
+      const postConfigs = Array.isArray(formData.post_configurations)
+        ? (formData.post_configurations as Record<string, unknown>[])
+        : []
+      if (postConfigs.length) {
+        postConfigs.forEach((post, index) => {
+          alternateColumn()
+          const label = typeof post.label === 'string' && post.label.trim() ? post.label : `Poste ${index + 1}`
+          const lines = [
+            `Téléphone virtuel sur cellulaire : ${post.virtualMobile ? 'Oui' : 'Non'}`,
+            `Boîte vocale vers courriel : ${post.voicemailToMail ? 'Oui' : 'Non'}`,
+          ]
+          drawExplicitQuestion(`P${index + 1}`, label, lines)
+        })
+      }
+    }
+
+    // SECTION 6: INFORMATIONS SUR LES COLLABORATEURS
+    if (formData.collaborators_identification || formData.collaborators_contacts) {
+      alternateColumn()
+      drawSectionHeading('Informations sur les collaborateurs', context.currentColumn)
+      drawQuestionBlock('Noms, prénoms et extensions *', formData.collaborators_identification)
+      alternateColumn()
+      drawQuestionBlock('Courriels et numéros par extension *', formData.collaborators_contacts)
+    }
+
+    // SECTION 7: MENU D'ENTREPRISE
+    const menuChoice = mapChoice(formData.include_company_menu as string | undefined, {
+      fr: 'Oui, en français uniquement',
+      en: 'Oui, en anglais uniquement',
+      both: 'Oui, en français et en anglais',
+      none: 'Non, je ne souhaite pas intégrer de menu',
+    })
+    if (menuChoice && menuChoice !== 'Non, je ne souhaite pas intégrer de menu') {
+      alternateColumn()
+      drawSectionHeading('Menu d' + String.fromCharCode(39) + 'entreprise', context.currentColumn)
+      drawQuestionBlock('Souhaitez-vous intégrer un menu d' + String.fromCharCode(39) + 'entreprise ? *', menuChoice)
+    }
+    // Scripts de menu (seulement si menu activé et scripts remplis)
+    if (menuChoice && menuChoice !== 'Non, je ne souhaite pas intégrer de menu') {
+      if (formData.french_menu_script) {
+        alternateColumn()
+        drawQuestionBlock('Script du menu en français', formData.french_menu_script)
+      }
+      if (formData.english_menu_script) {
+        alternateColumn()
+        drawQuestionBlock('Script du menu en anglais', formData.english_menu_script)
+      }
+    }
 
     if (formData.include_company_menu !== 'none') {
-      drawSectionHeading('Enregistrement professionnel')
+      alternateColumn()
+      drawSectionHeading('Enregistrement professionnel', context.currentColumn)
       drawQuestionBlock(
         'Souhaitez-vous un enregistrement professionnel ? *',
         mapChoice(formData.professional_recording as string | undefined, {
@@ -879,7 +1158,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    drawSectionHeading('Portabilité des numéros')
+    // SECTION 8: PORTABILITÉ DES NUMÉROS
+    alternateColumn()
+    drawSectionHeading('Portabilité des numéros', context.currentColumn)
     drawQuestionBlock(
       'Souhaitez-vous effectuer une portabilité ? *',
       mapChoice(formData.portability_choice as string | undefined, {
@@ -889,7 +1170,8 @@ export async function GET(request: NextRequest) {
     )
 
     if (formData.include_company_menu !== 'none') {
-      drawSectionHeading('Enregistrements audio du menu d’entreprise')
+      alternateColumn()
+      drawSectionHeading('Enregistrements audio du menu d' + String.fromCharCode(39) + 'entreprise', context.currentColumn)
       if (formData.professional_recording === 'self') {
         if (formData.french_recording_url || formData.english_recording_url) {
           const recordingsLines: string[] = []
@@ -904,6 +1186,7 @@ export async function GET(request: NextRequest) {
           drawQuestionBlock('Fichiers fournis par le client', 'Enregistrements attendus (aucun fichier reçu).')
         }
       } else {
+        alternateColumn()
         const description =
           formData.professional_recording === 'ai'
             ? 'Enregistrement pris en charge par Simplicom (voix IA).'
@@ -914,27 +1197,58 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Détails de portabilité (seulement si portabilité = oui)
     if (formData.portability_choice === 'yes') {
-      drawQuestionBlock('Nom du contact portabilité', formData.portability_contact_name)
-      drawQuestionBlock('Courriel du contact portabilité', formData.portability_contact_email)
-      drawQuestionBlock('Référence client / ID de compte', formData.portability_account_reference)
-      drawQuestionBlock('Nombre de lignes à porter', formData.portability_lines_count)
-      drawQuestionBlock('Numéros à porter', formData.portability_numbers)
-      drawQuestionBlock('Date souhaitée de portabilité', formData.portability_requested_date)
-      drawQuestionBlock('Lien lettre d’autorisation signée', formData.portability_authorization_letter)
-      drawQuestionBlock('Lien dernière facture opérateur', formData.portability_last_invoice)
+      if (formData.portability_contact_name) {
+        alternateColumn()
+        drawQuestionBlock('Nom du contact portabilité', formData.portability_contact_name)
+      }
+      if (formData.portability_contact_email) {
+        alternateColumn()
+        drawQuestionBlock('Courriel du contact portabilité', formData.portability_contact_email)
+      }
+      if (formData.portability_account_reference) {
+        alternateColumn()
+        drawQuestionBlock('Référence client / ID de compte', formData.portability_account_reference)
+      }
+      if (formData.portability_lines_count) {
+        alternateColumn()
+        drawQuestionBlock('Nombre de lignes à porter', formData.portability_lines_count)
+      }
+      if (formData.portability_numbers) {
+        alternateColumn()
+        drawQuestionBlock('Numéros à porter', formData.portability_numbers)
+      }
+      if (formData.portability_requested_date) {
+        alternateColumn()
+        drawQuestionBlock('Date souhaitée de portabilité', formData.portability_requested_date)
+      }
+      if (formData.portability_authorization_letter) {
+        alternateColumn()
+        drawQuestionBlock('Lien lettre d' + String.fromCharCode(39) + 'autorisation signée', formData.portability_authorization_letter)
+      }
+      if (formData.portability_last_invoice) {
+        alternateColumn()
+        drawQuestionBlock('Lien dernière facture opérateur', formData.portability_last_invoice)
+      }
     }
 
-    drawSectionHeading('Notification administrateur')
-    drawQuestionBlock(
-      'Souhaitez-vous notifier un administrateur ?',
-      formData.notify_admin === 'yes'
-        ? `Oui, adresse : ${formData.admin_notification_email ?? 'Non renseignée'}`
+    // SECTION 9: NOTIFICATION ADMINISTRATEUR
+    if (formData.notify_admin) {
+      alternateColumn()
+      drawSectionHeading('Notification administrateur', context.currentColumn)
+      const notifyText = formData.notify_admin === 'yes'
+        ? (formData.admin_notification_email ? `Oui, adresse : ${formData.admin_notification_email}` : 'Oui')
         : 'Non'
-    )
+      drawQuestionBlock('Souhaitez-vous notifier un administrateur ?', notifyText)
+    }
 
-    drawSectionHeading('Notes et informations complémentaires')
-    drawQuestionBlock('Notes supplémentaires', formData.additional_notes)
+    // SECTION 10: NOTES COMPLÉMENTAIRES
+    if (formData.additional_notes) {
+      alternateColumn()
+      drawSectionHeading('Notes et informations complémentaires', context.currentColumn)
+      drawQuestionBlock('Notes supplémentaires', formData.additional_notes)
+    }
 
     if (formData.portability_choice === 'yes') {
       appendPortabilityLetter({

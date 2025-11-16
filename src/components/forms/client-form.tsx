@@ -571,37 +571,39 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8 rounded-lg bg-white p-6 shadow">
+      <form onSubmit={handleSubmit} className="space-y-10 rounded-lg bg-white p-8 shadow-lg border border-gray-200">
         {error && (
-          <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700 text-center">
             {error}
           </div>
         )}
         {success && (
-          <div className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+          <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-700 text-center">
             {success}
           </div>
         )}
 
         {isReadOnly && (
-          <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+          <div className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800 text-center">
             Ce formulaire a déjà été soumis. Les champs sont affichés en lecture seule.
           </div>
         )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Informations de facturation
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Veuillez fournir les informations nécessaires à votre facturation.
-          </p>
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Informations de facturation
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Veuillez fournir les informations nécessaires à votre facturation.
+            </p>
+          </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 px-4">
             <div className="sm:col-span-2">
               <label
                 htmlFor="billing_company_name"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Nom de la compagnie *
               </label>
@@ -612,7 +614,8 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 required
                 value={formData.billing_company_name}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                placeholder="Entrez le nom de la compagnie"
                 disabled={isReadOnly}
               />
             </div>
@@ -620,7 +623,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div className="sm:col-span-2">
               <label
                 htmlFor="billing_contact_name"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Nom et prénom de la personne ressource *
               </label>
@@ -631,7 +634,8 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 required
                 value={formData.billing_contact_name}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                placeholder="Entrez le nom complet"
                 disabled={isReadOnly}
               />
             </div>
@@ -639,7 +643,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div>
               <label
                 htmlFor="billing_contact_phone"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Numéro de téléphone de la personne ressource *
               </label>
@@ -652,10 +656,11 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 pattern="^[0-9()+\\s.-]{6,}$"
                 value={formData.billing_contact_phone}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                placeholder="(123) 456-7890"
                 disabled={isReadOnly}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-gray-500 text-center">
                 La valeur doit être un numéro de téléphone valide.
               </p>
             </div>
@@ -663,7 +668,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div>
               <label
                 htmlFor="billing_contact_email"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Adresse courriel *
               </label>
@@ -674,10 +679,11 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 required
                 value={formData.billing_contact_email}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                placeholder="exemple@email.com"
                 disabled={isReadOnly}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-gray-500 text-center">
                 Cette adresse recevra les communications importantes (factures, relances, accès portail...).
               </p>
             </div>
@@ -685,7 +691,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div className="sm:col-span-2">
               <label
                 htmlFor="billing_address"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Adresse de facturation *
               </label>
@@ -693,31 +699,35 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 id="billing_address"
                 name="billing_address"
                 required
-                rows={2}
+                rows={3}
                 value={formData.billing_address}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
+                placeholder="Entrez l'adresse complète"
                 disabled={isReadOnly}
               />
             </div>
           </div>
         </section>
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Numéros de téléphone
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Indiquez votre préférence pour les numéros à conserver ou à activer.
-          </p>
+        {formData.phone_numbers_choice && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Numéros de téléphone
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Indiquez votre préférence pour les numéros à conserver ou à activer.
+            </p>
+          </div>
 
-          <div className="mt-4 space-y-4">
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium text-gray-700">
+          <div className="mt-6 space-y-6 px-4">
+            <fieldset className="border-2 border-gray-300 rounded-lg p-4 bg-white">
+              <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
                 Voulez-vous activer de nouveaux numéros ou conserver vos numéros actuels ? *
               </legend>
-              <div className="space-y-2">
-                <label className="flex items-center space-x-3">
+              <div className="mt-4 space-y-3">
+                <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                   <input
                     type="radio"
                     name="phone_numbers_choice"
@@ -725,12 +735,12 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     checked={formData.phone_numbers_choice === 'keep'}
                     onChange={handleFieldChange}
                     required
-                    className={`h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 ${controlDisabledClass}`}
+                    className={`h-5 w-5 border-2 border-gray-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 ${controlDisabledClass}`}
                     disabled={isReadOnly}
                   />
-                  <span className="text-sm text-gray-700">Conserver mes numéros actuels</span>
+                  <span className="text-sm font-medium text-gray-700">Conserver mes numéros actuels</span>
                 </label>
-                <label className="flex items-center space-x-3">
+                <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                   <input
                     type="radio"
                     name="phone_numbers_choice"
@@ -738,10 +748,10 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     checked={formData.phone_numbers_choice === 'new'}
                     onChange={handleFieldChange}
                     required
-                    className={`h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 ${controlDisabledClass}`}
+                    className={`h-5 w-5 border-2 border-gray-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 ${controlDisabledClass}`}
                     disabled={isReadOnly}
                   />
-                  <span className="text-sm text-gray-700">Activer de nouveaux numéros</span>
+                  <span className="text-sm font-medium text-gray-700">Activer de nouveaux numéros</span>
                 </label>
               </div>
             </fieldset>
@@ -749,7 +759,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div>
               <label
                 htmlFor="phone_numbers_to_keep"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Veuillez indiquer tous les numéros de téléphone à conserver et transférer *
               </label>
@@ -757,30 +767,35 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 id="phone_numbers_to_keep"
                 name="phone_numbers_to_keep"
                 required={formData.phone_numbers_choice === 'keep'}
-                rows={3}
+                rows={4}
                 value={formData.phone_numbers_to_keep}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
+                placeholder="Entrez les numéros séparés par des virgules ou sur des lignes différentes"
                 disabled={isReadOnly}
               />
             </div>
           </div>
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Portabilité des numéros
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Indiquez si vous souhaitez transférer vos numéros actuels vers Simplicom. Des informations complémentaires seront nécessaires pour lancer la demande.
-          </p>
+        {formData.portability_choice && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Portabilité des numéros
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Indiquez si vous souhaitez transférer vos numéros actuels vers Simplicom. Des informations complémentaires seront nécessaires pour lancer la demande.
+            </p>
+          </div>
 
-          <fieldset className="mt-4 space-y-2">
-            <legend className="text-sm font-medium text-gray-700">
+          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
+            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
               Souhaitez-vous effectuer une portabilité de vos numéros ? *
             </legend>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-3">
+            <div className="mt-4 space-y-3">
+              <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                 <input
                   type="radio"
                   name="portability_choice"
@@ -788,14 +803,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   checked={formData.portability_choice === 'yes'}
                   onChange={handleFieldChange}
                   required
-                  className={`h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 ${controlDisabledClass}`}
+                  className={`h-5 w-5 border-2 border-gray-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 ${controlDisabledClass}`}
                   disabled={isReadOnly}
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-sm font-medium text-gray-700">
                   Oui, je souhaite transférer mes numéros existants
                 </span>
               </label>
-              <label className="flex items-center space-x-3">
+              <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                 <input
                   type="radio"
                   name="portability_choice"
@@ -803,10 +818,10 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   checked={formData.portability_choice === 'no'}
                   onChange={handleFieldChange}
                   required
-                  className={`h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 ${controlDisabledClass}`}
+                  className={`h-5 w-5 border-2 border-gray-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 ${controlDisabledClass}`}
                   disabled={isReadOnly}
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-sm font-medium text-gray-700">
                   Non, je n&apos;ai pas besoin de portabilité
                 </span>
               </label>
@@ -822,7 +837,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 <div>
                   <label
                     htmlFor="portability_contact_name"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Nom et prénom du contact responsable *
                   </label>
@@ -833,14 +848,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required
                     value={formData.portability_contact_name}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="portability_contact_email"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Adresse courriel du contact portabilité *
                   </label>
@@ -851,7 +866,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required
                     value={formData.portability_contact_email}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
@@ -861,25 +876,24 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 <div>
                   <label
                     htmlFor="portability_account_reference"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    Référence client / ID de compte actuel *
+                    Référence client / ID de compte actuel
                   </label>
                   <input
                     id="portability_account_reference"
                     name="portability_account_reference"
                     type="text"
-                    required
                     value={formData.portability_account_reference}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="portability_requested_date"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Date souhaitée pour la portabilité *
                   </label>
@@ -890,14 +904,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required
                     value={formData.portability_requested_date}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="portability_lines_count"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Nombre de lignes à porter *
                   </label>
@@ -909,7 +923,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required
                     value={formData.portability_lines_count}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
@@ -918,7 +932,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
               <div>
                 <label
                   htmlFor="portability_numbers"
-                  className="block text-sm font-medium text-gray-700"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
                 >
                   Numéros à porter (un par ligne) *
                 </label>
@@ -929,14 +943,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   rows={4}
                   value={formData.portability_numbers}
                   onChange={handleFieldChange}
-                  className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                  className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                   disabled={isReadOnly}
                 />
               </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Lettre d&apos;autorisation signée (PDF)
                 </label>
                 <input
@@ -974,7 +988,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Dernière facture opérateur (PDF)
                 </label>
                 <input
@@ -1020,17 +1034,24 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           )}
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Adresses de service
-          </h3>
+        {(formData.emergency_service_address || formData.outgoing_display_name) && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Adresses de service
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Informations nécessaires pour les services d'urgence et l'affichage des appels sortants.
+            </p>
+          </div>
 
-          <div className="mt-4 space-y-4">
+          <div className="mt-6 space-y-6 px-4">
             <div>
               <label
                 htmlFor="emergency_service_address"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Adresse complète à communiquer au service d&apos;urgences 911 *
               </label>
@@ -1038,10 +1059,11 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 id="emergency_service_address"
                 name="emergency_service_address"
                 required
-                rows={2}
+                rows={3}
                 value={formData.emergency_service_address}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
+                placeholder="Entrez l'adresse complète pour le service 911"
                 disabled={isReadOnly}
               />
             </div>
@@ -1049,7 +1071,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div>
               <label
                 htmlFor="outgoing_display_name"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Affichage sortant de vos postes (ex.: Compagnie ABC) *
               </label>
@@ -1060,23 +1082,28 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 required
                 value={formData.outgoing_display_name}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                placeholder="Ex: Compagnie ABC"
                 disabled={isReadOnly}
               />
             </div>
           </div>
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Téléphones de bureau IP
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Indiquez votre stratégie pour les appareils téléphoniques.
-          </p>
+        {formData.ip_phone_choice && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Téléphones de bureau IP
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Indiquez votre stratégie pour les appareils téléphoniques.
+            </p>
+          </div>
 
-          <fieldset className="mt-4 space-y-2">
-            <legend className="text-sm font-medium text-gray-700">
+          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
+            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
               Allez-vous conserver vos téléphones IP ou acheter de nouveaux appareils ? *
             </legend>
             <div className="space-y-2">
@@ -1128,19 +1155,23 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           </fieldset>
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Configuration des postes téléphoniques
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Sélectionnez les options à activer pour chaque poste. Vous pouvez renommer les postes si nécessaire.
-          </p>
+        {formData.posts_count > 0 && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Configuration des postes téléphoniques
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Sélectionnez les options à activer pour chaque poste. Vous pouvez renommer les postes si nécessaire.
+            </p>
+          </div>
 
-          <div className="mt-4">
+          <div className="mt-6 px-4">
             <label
               htmlFor="posts_count"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-semibold text-gray-700 mb-2"
             >
               Nombre de postes à configurer *
             </label>
@@ -1153,7 +1184,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
               required
               value={formData.posts_count}
               onChange={(event) => handlePostsCountChange(Number.parseInt(event.target.value, 10) || 1)}
-              className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+              className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
               disabled={isReadOnly}
             />
             <p className="mt-1 text-xs text-gray-500">
@@ -1165,14 +1196,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             {formData.post_configurations.map((post, index) => (
               <div key={`post-${index}`} className="rounded-md border border-gray-200 p-4">
                 <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Nom du poste
                   </label>
                   <input
                     type="text"
                     value={post.label}
                     onChange={event => handlePostFieldChange(index, 'label', event.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1211,7 +1242,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                           type="text"
                           value={post.device_brand ?? ''}
                           onChange={event => handlePostFieldChange(index, 'device_brand', event.target.value)}
-                          className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                          className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                           disabled={isReadOnly}
                         />
                       </div>
@@ -1223,7 +1254,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                           type="text"
                           value={post.device_mac ?? ''}
                           onChange={event => handlePostFieldChange(index, 'device_mac', event.target.value)}
-                          className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                          className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                           disabled={isReadOnly}
                         />
                       </div>
@@ -1235,7 +1266,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                           type="text"
                           value={post.device_ip ?? ''}
                           onChange={event => handlePostFieldChange(index, 'device_ip', event.target.value)}
-                          className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                          className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                           disabled={isReadOnly}
                         />
                       </div>
@@ -1246,17 +1277,24 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             ))}
           </div>
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Informations sur les collaborateurs
-          </h3>
+        {(formData.collaborators_identification || formData.collaborators_contacts) && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Informations sur les collaborateurs
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Renseignez les informations sur les collaborateurs et leurs extensions.
+            </p>
+          </div>
 
-          <div className="mt-4 space-y-4">
+          <div className="mt-6 space-y-6 px-4">
             <div>
               <label
                 htmlFor="collaborators_identification"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Noms, prénoms et extensions (ex.: Poste 1: Laura Mercier - Ext 101) *
               </label>
@@ -1267,7 +1305,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 rows={4}
                 value={formData.collaborators_identification}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                 disabled={isReadOnly}
               />
             </div>
@@ -1275,7 +1313,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div>
               <label
                 htmlFor="collaborators_contacts"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Courriels et numéros de téléphone par extension *
               </label>
@@ -1286,20 +1324,27 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 rows={4}
                 value={formData.collaborators_contacts}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                 disabled={isReadOnly}
               />
             </div>
           </div>
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Menu d&apos;entreprise
-          </h3>
+        {formData.include_company_menu && formData.include_company_menu !== 'none' && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Menu d&apos;entreprise
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Configurez le menu d'entreprise pour vos appels entrants.
+            </p>
+          </div>
 
-          <fieldset className="mt-4 space-y-2">
-            <legend className="text-sm font-medium text-gray-700">
+          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
+            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
               Souhaitez-vous intégrer un menu d&apos;entreprise ? *
             </legend>
             <div className="space-y-2">
@@ -1372,7 +1417,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 <div>
                   <label
                     htmlFor="french_menu_script"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Script du menu d&apos;entreprise en français
                     {showFrenchMenuScript ? ' *' : ''}
@@ -1384,7 +1429,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required={showFrenchMenuScript}
                     value={formData.french_menu_script}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1394,7 +1439,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 <div>
                   <label
                     htmlFor="english_menu_script"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
                   >
                     Script du menu d&apos;entreprise en anglais
                     {showEnglishMenuScript ? ' *' : ''}
@@ -1406,7 +1451,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                     required={showEnglishMenuScript}
                     value={formData.english_menu_script}
                     onChange={handleFieldChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                    className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1416,15 +1461,17 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
         </section>
 
         {showRecordingSection && (
-          <section>
-            <h3 className="text-base font-semibold text-gray-900">
-              Enregistrement professionnel
-            </h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Sélectionnez l&apos;option désirée pour l&apos;enregistrement de votre menu d&apos;entreprise.
-            </p>
+          <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+            <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+              <h3 className="text-xl font-bold text-gray-900">
+                Enregistrement professionnel
+              </h3>
+              <p className="mt-3 text-sm text-gray-600">
+                Sélectionnez l&apos;option désirée pour l&apos;enregistrement de votre menu d&apos;entreprise.
+              </p>
+            </div>
 
-            <fieldset className="mt-4 space-y-2">
+            <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
               <legend className="sr-only">
                 Enregistrement professionnel du menu
               </legend>
@@ -1491,7 +1538,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 >
                   {showFrenchRecordingUpload && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Fichier MP3 – version française
                       </label>
                       <input
@@ -1527,7 +1574,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   )}
                   {showEnglishRecordingUpload && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Fichier MP3 – version anglaise
                       </label>
                       <input
@@ -1567,17 +1614,19 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
           </section>
         )}
 
+        {formData.notify_admin && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Notification de l&apos;administrateur
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Vous pouvez demander à ce qu&apos;un administrateur reçoive une copie de votre soumission par courriel.
+            </p>
+          </div>
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Notification de l&apos;administrateur
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Vous pouvez demander à ce qu&apos;un administrateur reçoive une copie de votre soumission par courriel.
-          </p>
-
-          <fieldset className="mt-4 space-y-2">
-            <legend className="text-sm font-medium text-gray-700">
+          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
+            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
               Souhaitez-vous notifier un administrateur ? *
             </legend>
             <div className="space-y-2">
@@ -1618,7 +1667,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             <div className="mt-4">
               <label
                 htmlFor="admin_notification_email"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-semibold text-gray-700 mb-2"
               >
                 Adresse courriel à notifier *
               </label>
@@ -1629,7 +1678,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 required
                 value={formData.admin_notification_email}
                 onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
+                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
                 disabled={isReadOnly}
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -1638,33 +1687,51 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           )}
         </section>
+        )}
 
-        <section>
-          <h3 className="text-base font-semibold text-gray-900">
-            Notes et informations complémentaires
-          </h3>
-          <textarea
-            id="additional_notes"
-            name="additional_notes"
-            rows={4}
-            value={formData.additional_notes}
-            onChange={handleFieldChange}
-            className={`mt-2 block w-full rounded-md border-gray-300 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${inputDisabledClass}`}
-            disabled={isReadOnly}
-          />
+        {formData.additional_notes && (
+        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
+          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
+            <h3 className="text-xl font-bold text-gray-900">
+              Notes et informations complémentaires
+            </h3>
+            <p className="mt-3 text-sm text-gray-600">
+              Ajoutez toute information supplémentaire que vous souhaitez communiquer.
+            </p>
+          </div>
+
+          <div className="mt-6 px-4">
+            <label
+              htmlFor="additional_notes"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              Notes supplémentaires
+            </label>
+            <textarea
+              id="additional_notes"
+              name="additional_notes"
+              rows={5}
+              value={formData.additional_notes}
+              onChange={handleFieldChange}
+              className={`mt-2 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
+              placeholder="Entrez vos notes supplémentaires ici..."
+              disabled={isReadOnly}
+            />
+          </div>
         </section>
+        )}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mt-8 pt-6 border-t-2 border-gray-200">
+          <p className="text-sm text-gray-600 text-center sm:text-left">
             Merci de vérifier vos informations avant l&apos;envoi.
           </p>
           <button
             type="submit"
             disabled={loading || isReadOnly}
-            className={`inline-flex items-center justify-center rounded-md border border-transparent px-6 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            className={`inline-flex items-center justify-center rounded-lg border-2 border-transparent px-8 py-3 text-base font-semibold text-white shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all ${
               loading || isReadOnly
                 ? 'cursor-not-allowed bg-indigo-400 focus:ring-indigo-400'
-                : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-xl focus:ring-indigo-500 transform hover:scale-105'
             }`}
             aria-disabled={loading || isReadOnly}
           >

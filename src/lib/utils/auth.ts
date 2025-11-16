@@ -7,9 +7,37 @@ import type { Agent, UserRole } from '@/lib/types/database.types'
  * Récupère l'utilisateur actuellement connecté
  */
 export async function getCurrentUser(): Promise<User | null> {
-  const supabase = await createClient()
-  const { data } = await supabase.auth.getUser()
-  return data.user ?? null
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    
+    // Si erreur de refresh token invalide ou session expirée, retourner null
+    if (error) {
+      // Les erreurs de refresh token invalide sont courantes quand la session a expiré
+      // On les traite comme une session invalide et retournons null
+      // Cela permettra à requireAuth() de rediriger vers la page de connexion
+      const isRefreshTokenError = 
+        error.message?.includes('Refresh Token') || 
+        error.message?.includes('Invalid Refresh Token') ||
+        error.message?.includes('Refresh Token Not Found')
+      
+      if (isRefreshTokenError) {
+        // Session expirée ou invalide, retourner null sans logger (c'est attendu)
+        return null
+      }
+      
+      // Pour les autres erreurs, logger mais retourner null
+      console.warn('Erreur lors de la récupération de l\'utilisateur:', error.message)
+      return null
+    }
+    
+    return data.user ?? null
+  } catch (err) {
+    // En cas d'exception, retourner null
+    // Cela permettra une redirection automatique vers la page de connexion
+    console.warn('Exception lors de la récupération de l\'utilisateur:', err)
+    return null
+  }
 }
 
 /**

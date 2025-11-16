@@ -160,9 +160,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    if (!client.data) {
-      return NextResponse.json({ error: 'Client not found' }, { status: 404 })
-    }
+    // Store reference to client data to avoid null checks
+    const currentClient = client.data
 
     const agentFormSnapshot = {
       generated_at: new Date().toISOString(),
@@ -174,11 +173,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     let existingNotes: unknown = null
-    if (client.data.notes) {
+    if (currentClient.notes) {
       try {
-        existingNotes = JSON.parse(client.data.notes)
+        existingNotes = JSON.parse(currentClient.notes)
       } catch {
-        existingNotes = { legacy: client.data.notes }
+        existingNotes = { legacy: currentClient.notes }
       }
     }
 
@@ -212,7 +211,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     } = await supabaseAdmin
       .from('clients')
       .update(updatePayload)
-      .eq('id', client.data.id)
+      .eq('id', currentClient.id)
       .select('*')
       .single()
 
@@ -226,11 +225,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    client = { data: updatedClient, error: null }
+    // Use updatedClient directly instead of reassigning client
+    clientId = updatedClient.id
 
-    clientId = client.data.id
-
-    if (!client.data.agent_id) {
+    if (!updatedClient.agent_id) {
       return NextResponse.json(
         { error: 'Le client n’est associé à aucun agent. Veuillez assigner un agent avant de générer un lien.' },
         { status: 400 }
@@ -245,7 +243,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .from('magic_links')
       .select('id, status, created_at')
       .eq('client_id', clientId)
-      .eq('agent_id', client.data.agent_id)
+      .eq('agent_id', updatedClient.agent_id)
       .order('created_at', { ascending: false })
       .maybeSingle()
 
@@ -269,11 +267,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let userEmailConfirmed = false
 
     const { data: createdUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-      email: client.data.email,
+      email: updatedClient.email,
       password: temporaryPassword,
       email_confirm: true, // Auto-confirm email
       user_metadata: {
-        full_name: client.data.full_name,
+        full_name: updatedClient.full_name,
         role: 'user'
       }
     })
@@ -287,13 +285,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       if (!isAlreadyRegistered) {
         console.error('createUserError (generate magic link)', createUserError)
+        let errorDetails: string
+        if (createUserError instanceof Error) {
+          errorDetails = createUserError.message
+        } else if (createUserError && typeof createUserError === 'object' && 'message' in createUserError) {
+          errorDetails = String((createUserError as { message?: unknown }).message ?? createUserError)
+        } else if (createUserError) {
+          errorDetails = String(createUserError)
+        } else {
+          errorDetails = 'Unknown error'
+        }
         return NextResponse.json(
           {
             error: 'Failed to create user account',
-            details:
-              createUserError instanceof Error
-                ? createUserError.message
-                : (createUserError as { message?: string })?.message ?? createUserError ?? null,
+            details: errorDetails,
           },
           { status: 500 }
         )
@@ -311,7 +316,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         )
       }
 
-      const existingUser = existingUsers.users.find(user => user.email === client.data.email)
+      const existingUser = existingUsers.users.find(user => user.email === updatedClient.email)
 
       if (!existingUser) {
         return NextResponse.json(
@@ -354,8 +359,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .upsert(
           {
             id: userId,
-            email: client.data.email,
-            full_name: client.data.full_name,
+            email: updatedClient.email,
+            full_name: updatedClient.full_name,
             role: 'user',
           },
           { onConflict: 'id' }
@@ -381,7 +386,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       id: randomUUID(),
       token,
       client_id: clientId,
-      agent_id: client.data.agent_id,
+      agent_id: updatedClient.agent_id,
       status: 'pending',
       expires_at: expiresAt.toISOString(),
       used_at: null,
@@ -406,7 +411,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     const urlObj = new URL('/auth/login', appUrl)
-    urlObj.searchParams.set('email', client.data.email)
+    urlObj.searchParams.set('email', updatedClient.email)
     urlObj.searchParams.set('password', temporaryPassword)
     const url = urlObj.toString()
 
@@ -447,7 +452,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 </tr>
                 <tr>
                   <td style="padding: 28px 32px; color: #1D3B4E;">
-                    <p style="margin-top: 0; font-size: 16px;">Bonjour ${client.data.full_name ?? ''},</p>
+                    <p style="margin-top: 0; font-size: 16px;">Bonjour ${updatedClient.full_name ?? ''},</p>
                     <p style="font-size: 15px; line-height: 1.65;">
                       Votre agent vient de générer un lien magique pour accéder à votre espace client. Cliquez sur le bouton ci-dessous pour vous connecter avec les identifiants fournis.
                     </p>
@@ -464,7 +469,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     </p>
                     <h3 style="font-size: 16px; margin: 28px 0 12px;">Vos identifiants de connexion</h3>
                     <ul style="list-style: none; padding: 0; margin: 0 0 20px;">
-                      <li style="font-size: 14px;"><strong>Email :</strong> ${client.data.email}</li>
+                      <li style="font-size: 14px;"><strong>Email :</strong> ${updatedClient.email}</li>
                       <li style="font-size: 14px;"><strong>Mot de passe provisoire :</strong> ${temporaryPassword}</li>
                     </ul>
                     <p style="font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
@@ -498,11 +503,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       `
 
       const emailText = [
-        `Bonjour ${client.data.full_name ?? ''},`,
+        `Bonjour ${updatedClient.full_name ?? ''},`,
         '',
         'Votre agent vient de générer un lien magique pour accéder à votre espace client.',
         `Lien : ${url}`,
-        `Email : ${client.data.email}`,
+        `Email : ${updatedClient.email}`,
         `Mot de passe provisoire : ${temporaryPassword}`,
         expiryLabel.replace(/<[^>]*>/g, ''),
         '',
@@ -520,8 +525,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       try {
         await resend.emails.send({
           from: fromEmail,
-          to: client.data.email,
-          subject: 'Votre accès à l’espace client',
+          to: updatedClient.email,
+          subject: "Votre accès à l'espace client",
           html: emailHtml,
           text: emailText,
         })

@@ -4,7 +4,8 @@ import React, { useEffect, useState, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database.types'
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -12,6 +13,7 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const [loading, setLoading] = useState<boolean>(false)
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [displayEmail, setDisplayEmail] = useState<string | null>(null)
@@ -80,6 +82,26 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           <nav className="flex items-center space-x-3">
+            <Link
+              href="/admin/dashboard"
+              className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                pathname === '/admin/dashboard'
+                  ? 'bg-[#00C3D9] text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Tableau de bord
+            </Link>
+            <Link
+              href="/admin/submissions"
+              className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                pathname === '/admin/submissions'
+                  ? 'bg-[#00C3D9] text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Fichiers PDF & MP3
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth, getAgentProfile } from '@/lib/utils/auth'
-import type { Agent, Client, MagicLink } from '@/lib/types/database.types'
+import type { Client, MagicLink } from '@/lib/types/database.types'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 

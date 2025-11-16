@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Agent, Client, MagicLink } from '@/lib/types/database.types'
 import AdminMagicLinkActions from '@/components/AdminMagicLinkActions'
+import Link from 'next/link'
 
 type AgentWithDetails = Agent & {
   profile?: {
@@ -15,6 +16,7 @@ type ClientWithLinks = Client & {
   magic_links: MagicLink[]
   latest_submission_id?: string | null
   latest_submission_at?: string | null
+  latest_submission_data?: any
 }
 
 export default async function AdminDashboard(): Promise<React.JSX.Element> {
@@ -47,7 +49,7 @@ export default async function AdminDashboard(): Promise<React.JSX.Element> {
         .select('id, client_id, agent_id, token, status, created_at, expires_at, used_at'),
       supabase
         .from('form_submissions')
-        .select('id, submitted_at, magic_links(client_id)')
+        .select('id, submitted_at, data, magic_links(client_id)')
         .order('submitted_at', { ascending: false }),
       supabase.from('agents').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('*'),
@@ -58,29 +60,36 @@ export default async function AdminDashboard(): Promise<React.JSX.Element> {
   const agents = agentsResult.data ?? []
   const clients = clientsResult.data ?? []
 
-  const latestSubmissionByClient = submissions.reduce<Record<string, { id: string; submitted_at: string | null }>>(
-    (acc, submission) => {
-      const clientId = submission.magic_links?.client_id ?? null
-      if (!clientId) return acc
+  const latestSubmissionByClient = submissions.reduce<
+    Record<string, { id: string; submitted_at: string | null; data: any }>
+  >((acc, submission) => {
+    const clientId = submission.magic_links?.client_id ?? null
+    if (!clientId) return acc
 
-      const existing = acc[clientId]
-      const currentSubmittedAt = submission.submitted_at ?? null
-      const currentTimestamp = currentSubmittedAt ? new Date(currentSubmittedAt).getTime() : 0
+    const existing = acc[clientId]
+    const currentSubmittedAt = submission.submitted_at ?? null
+    const currentTimestamp = currentSubmittedAt ? new Date(currentSubmittedAt).getTime() : 0
 
-      if (!existing) {
-        acc[clientId] = { id: submission.id, submitted_at: currentSubmittedAt }
-        return acc
+    if (!existing) {
+      acc[clientId] = {
+        id: submission.id,
+        submitted_at: currentSubmittedAt,
+        data: (submission as { data?: any }).data ?? null,
       }
-
-      const existingTimestamp = existing.submitted_at ? new Date(existing.submitted_at).getTime() : 0
-      if (currentTimestamp >= existingTimestamp) {
-        acc[clientId] = { id: submission.id, submitted_at: currentSubmittedAt }
-      }
-
       return acc
-    },
-    {}
-  )
+    }
+
+    const existingTimestamp = existing.submitted_at ? new Date(existing.submitted_at).getTime() : 0
+    if (currentTimestamp >= existingTimestamp) {
+      acc[clientId] = {
+        id: submission.id,
+        submitted_at: currentSubmittedAt,
+        data: (submission as { data?: any }).data ?? null,
+      }
+    }
+
+    return acc
+  }, {})
 
   const activeLinks = magicLinks.filter(link => link.status === 'pending').length
   const completedForms = submissions.length
@@ -128,6 +137,7 @@ export default async function AdminDashboard(): Promise<React.JSX.Element> {
         ...client,
         latest_submission_id: submissionMeta?.id ?? null,
         latest_submission_at: submissionMeta?.submitted_at ?? null,
+        latest_submission_data: submissionMeta?.data ?? null,
         magic_links: magicLinksByClient[client.id] ?? [],
       }
     }),
@@ -142,9 +152,17 @@ export default async function AdminDashboard(): Promise<React.JSX.Element> {
               <h1 className="text-3xl font-bold text-[#1D3B4E]">Dashboard Administrateur</h1>
               <p className="text-sm text-[#1D3B4E]/60">Bienvenue {profile.full_name ?? 'Administrateur'}</p>
             </div>
-            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-[#00C3D9] text-white">
-              Accès {profile.role === 'admin' ? 'Administrateur' : 'Support'}
-            </span>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/admin/submissions"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                📁 Fichiers PDF & MP3
+              </Link>
+              <span className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-[#00C3D9] text-white">
+                Accès {profile.role === 'admin' ? 'Administrateur' : 'Support'}
+              </span>
+            </div>
           </div>
         </div>
       </header>

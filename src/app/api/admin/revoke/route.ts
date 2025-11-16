@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import type { Database, MagicLink } from '@/lib/types/database.types'
 import { requireRole } from '@/lib/utils/auth'
 
@@ -35,24 +35,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    const supabase = createAdminClient<Database>(supabaseUrl, serviceRoleKey, {
+    const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     })
 
-    const nowIso: string = new Date().toISOString()
-
     const {
       data,
       error,
     }: { data: MagicLink | null; error: unknown } = await supabase
       .from('magic_links')
-      .update({
-        status: 'revoked',
-        revoked_at: nowIso,
-      })
+      .delete()
       .eq('id', bodyRaw.link_id)
       .select()
       .single()

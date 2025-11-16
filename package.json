@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:turbo": "next dev --turbo",
+    "clean": "rmdir /s /q .next 2>nul || rmdir -rf .next || echo Cleaned",
+    "clean:start": "npm run clean && npm run dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
