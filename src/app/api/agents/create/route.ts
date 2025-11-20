@@ -9,6 +9,7 @@ interface RequestBody {
   password: string
   role: UserRole
   phone?: string
+  full_name?: string
 }
 
 /** Type guards */
@@ -21,9 +22,9 @@ const isUserRole = (v: unknown): v is UserRole => v === 'agent' || v === 'suppor
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    // Ensure the caller is a support user
+    // Ensure the caller is an admin or support user
     try {
-      await requireRole(['support'])
+      await requireRole(['admin', 'support'])
     } catch {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const { email, password, role, phone } = body as RequestBody
+    const { email, password, role, phone, full_name } = body as RequestBody
 
     // Ensure service role key exists
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -92,6 +93,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error: 'Failed to create agent record', details: insertError?.message ?? null },
         { status: 500 }
       )
+    }
+
+    // Create or update profile (always create, even if full_name is not provided)
+    const { error: profileError } = await admin
+      .from('profiles')
+      .upsert({
+        id: createdUser.id,
+        email: createdUser.email ?? email,
+        full_name: full_name || null,
+        role: role,
+      }, {
+        onConflict: 'id',
+      })
+
+    if (profileError) {
+      console.warn('Failed to create/update profile:', profileError.message)
+      // Don't fail the whole request if profile update fails, but log it
     }
 
     return NextResponse.json(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { UserRole } from '@/lib/types/database.types'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib'
 
 export const runtime = 'nodejs'
 
@@ -79,7 +79,7 @@ const buildContentLines = (data: unknown, label?: string, depth = 0): string[] =
   return lines
 }
 
-const wrapLine = (text: string, maxWidth: number, font: any, size: number): string[] => {
+const wrapLine = (text: string, maxWidth: number, font: PDFFont, size: number): string[] => {
   const words = text.split(' ')
   const lines: string[] = []
   let current = ''
@@ -95,7 +95,7 @@ const wrapLine = (text: string, maxWidth: number, font: any, size: number): stri
       }
       // Couper le mot en plusieurs parties
       let remainingWord = word
-      while (remainingWord.length > 0) {
+      while (remainingWord && remainingWord.length > 0) {
         let charCount = 1
         let segment = remainingWord.substring(0, charCount)
         let segmentWidth = font.widthOfTextAtSize(segment, size)
@@ -136,7 +136,7 @@ const drawLines = (
   doc: PDFDocument,
   page: ReturnType<PDFDocument['addPage']>,
   lines: string[],
-  font: any,
+  font: PDFFont,
   fontSize: number,
   margin: number,
   verticalSpacing: number
@@ -190,10 +190,17 @@ const drawDivider = (
 
 const extractPhoneEntries = (raw: unknown): string[] => {
   if (!raw) return []
-  const text = Array.isArray(raw)
-    ? (raw as unknown[]).map(item => (item == null ? '' : String(item))).join('\n')
-    : String(raw)
-
+  
+  // Si c'est un tableau, utiliser directement les éléments
+  if (Array.isArray(raw)) {
+    return (raw as unknown[])
+      .map(item => (item == null ? '' : String(item).trim()))
+      .filter(entry => entry.length > 0)
+      .slice(0, 10)
+  }
+  
+  // Sinon, traiter comme une chaîne et diviser
+  const text = String(raw)
   return text
     .split(/[\r\n,;]+/)
     .map(entry => entry.trim())
@@ -201,10 +208,91 @@ const extractPhoneEntries = (raw: unknown): string[] => {
     .slice(0, 10)
 }
 
+/**
+ * Nettoie un numéro de téléphone en enlevant les caractères non numériques
+ * et enlève l'indicatif de pays (1) au début si présent
+ */
+const cleanPhoneNumber = (phone: string): string => {
+  if (!phone || typeof phone !== 'string') {
+    return ''
+  }
+  // Enlever tous les caractères non numériques (espaces, tirets, parenthèses, points, plus, etc.)
+  let cleaned = phone.replace(/[^\d]/g, '')
+  
+  // Enlever l'indicatif de pays "1" au début si présent (pour les numéros nord-américains)
+  // Un numéro nord-américain a 10 chiffres
+  // Si on a 11 chiffres ou plus et que ça commence par 1, on l'enlève
+  while (cleaned.length > 10 && cleaned.startsWith('1')) {
+    cleaned = cleaned.substring(1)
+  }
+  
+  return cleaned
+}
+
+/**
+ * Mapping des préfixes 8XX vers leurs Resp Org correspondants
+ * Modifiez ce mapping selon vos besoins spécifiques
+ */
+const EIGHT_XX_RESP_ORG_MAP: Record<string, string> = {
+  '800': '800-RESP-ORG',
+  '811': '811-RESP-ORG',
+  '822': '822-RESP-ORG',
+  '833': '833-RESP-ORG',
+  '844': '844-RESP-ORG',
+  '855': '855-RESP-ORG',
+  '866': '866-RESP-ORG',
+  '877': '877-RESP-ORG',
+  '888': '888-RESP-ORG',
+  '899': '899-RESP-ORG',
+}
+
+/**
+ * Détermine le Resp Org basé sur le préfixe 8XX du numéro
+ * Les préfixes 8XX (811, 822, 833, 844, 855, 866, 877, 888, 899, 800) 
+ * nécessitent un Resp Org spécifique
+ */
+const getRespOrgFor8XX = (phoneNumber: string): string | null => {
+  if (!phoneNumber || typeof phoneNumber !== 'string') {
+    return null
+  }
+  
+  // Nettoyer le numéro
+  const cleaned = cleanPhoneNumber(phoneNumber.trim())
+  
+  // Debug: log pour vérifier le nettoyage
+  console.log(`[RespOrg] Numéro original: "${phoneNumber}", Nettoyé: "${cleaned}"`)
+  
+  // Vérifier si le numéro nettoyé a au moins 3 chiffres
+  if (cleaned.length < 3) {
+    console.log(`[RespOrg] Numéro trop court (${cleaned.length} caractères)`)
+    return null
+  }
+  
+  // Extraire les 3 premiers chiffres
+  const prefix = cleaned.substring(0, 3)
+  console.log(`[RespOrg] Préfixe détecté: "${prefix}"`)
+  
+  // Vérifier si le préfixe commence par 8 (pour les numéros 8XX)
+  if (prefix.startsWith('8')) {
+    // Vérifier si c'est un préfixe 8XX valide (800, 811, 822, 833, 844, 855, 866, 877, 888, 899)
+    if (EIGHT_XX_RESP_ORG_MAP[prefix]) {
+      const respOrg = EIGHT_XX_RESP_ORG_MAP[prefix]
+      console.log(`[RespOrg] Resp Org trouvé: "${respOrg}" pour le préfixe "${prefix}"`)
+      return respOrg
+    } else {
+      console.log(`[RespOrg] Préfixe "${prefix}" commence par 8 mais n'est pas dans le mapping`)
+    }
+  } else {
+    console.log(`[RespOrg] Préfixe "${prefix}" ne commence pas par 8`)
+  }
+  
+  return null
+}
+
 interface PortabilityLetterPayload {
   pdfDoc: PDFDocument
-  boldFont: any
-  regularFont: any
+  boldFont: PDFFont
+  regularFont: PDFFont
   clientInfo: {
     full_name?: string | null
     company?: string | null
@@ -264,18 +352,49 @@ const appendPortabilityLetter = ({
     })
   }
 
-  const topBandHeight = 45 // Réduit de 54 à 45
+  const topBandHeight = 60 // Augmenté pour plus d'impact
+  // Gradient pour l'en-tête
+  const gradientSteps = 4
+  const stepHeight = topBandHeight / gradientSteps
+  for (let i = 0; i < gradientSteps; i++) {
+    const opacity = 0.95 - (i * 0.15)
+    page.drawRectangle({
+      x: 0,
+      y: height - topBandHeight + (i * stepHeight),
+      width,
+      height: stepHeight,
+      color: rgb(0.06, 0.35, 0.49),
+      opacity,
+    })
+  }
+  
+  // Ligne décorative
   page.drawRectangle({
     x: 0,
     y: height - topBandHeight,
     width,
-    height: topBandHeight,
-    color: rgb(0.8, 0.85, 0.95),
+    height: 4,
+    color: rgb(0, 0.76, 0.85),
+    opacity: 0.8,
   })
 
   // Construire le titre en concaténant pour éviter les problèmes d'apostrophe typographique
   const letterTitle = 'LETTRE D' + String.fromCharCode(39) + 'AUTORISATION'
-  drawCentered(letterTitle, height - topBandHeight / 2 - 4, 14) // Réduit de 18 à 14
+  
+  // Ombre du titre
+  const titleSize = 20
+  const titleWidth = boldFont.widthOfTextAtSize(letterTitle, titleSize)
+  page.drawText(letterTitle, {
+    x: (width - titleWidth) / 2 + 2,
+    y: height - topBandHeight / 2 - 2,
+    size: titleSize,
+    font: boldFont,
+    color: rgb(0, 0, 0),
+    opacity: 0.2,
+  })
+  
+  // Titre principal
+  drawCentered(letterTitle, height - topBandHeight / 2, titleSize)
   drawLabelValue(
     "Nom de l’entreprise :",
     (clientInfo?.company ?? clientInfo?.full_name ?? '') || '________________________________________',
@@ -340,40 +459,70 @@ const appendPortabilityLetter = ({
   const tableHeight = rowHeight * 11
   const tableWidth = width - margin * 2
   const numberColumnWidth = tableWidth * 0.6
+  const shadowOffset = 2
 
+  // Tableau avec ombre
+  page.drawRectangle({
+    x: margin + shadowOffset,
+    y: tableTop - tableHeight - shadowOffset,
+    width: tableWidth,
+    height: tableHeight,
+    color: rgb(0.85, 0.85, 0.85),
+    opacity: 0.15,
+  })
+  
   page.drawRectangle({
     x: margin,
     y: tableTop - tableHeight,
     width: tableWidth,
     height: tableHeight,
-    borderWidth: 1,
-    borderColor: rgb(0.3, 0.3, 0.3),
+    borderWidth: 1.5,
+    borderColor: rgb(0.2, 0.2, 0.2),
   })
 
+  // En-tête du tableau avec gradient
+  const headerGradientSteps = 3
+  const headerStepHeight = rowHeight / headerGradientSteps
+  for (let i = 0; i < headerGradientSteps; i++) {
+    page.drawRectangle({
+      x: margin,
+      y: tableTop - rowHeight + (i * headerStepHeight),
+      width: tableWidth,
+      height: headerStepHeight,
+      color: rgb(0, 0.76, 0.85),
+      opacity: 0.9 - (i * 0.2),
+    })
+  }
+  
+  // Bordure en bas de l'en-tête
   page.drawRectangle({
     x: margin,
     y: tableTop - rowHeight,
     width: tableWidth,
-    height: rowHeight,
-    color: rgb(0.88, 0.9, 0.96),
+    height: 2,
+    color: rgb(0, 0.65, 0.75),
   })
 
   page.drawText('NUMÉROS À TRANSFÉRER', {
     x: margin + 10,
-    y: tableTop - rowHeight + 5, // Ajusté pour la nouvelle hauteur
-    size: 9, // Réduit de 11 à 9
+    y: tableTop - rowHeight + 6,
+    size: 10,
     font: boldFont,
-    color: textColor,
+    color: rgb(1, 1, 1),
   })
   page.drawText('FOURNISSEUR', {
     x: margin + numberColumnWidth + 10,
-    y: tableTop - rowHeight + 5, // Ajusté pour la nouvelle hauteur
-    size: 9, // Réduit de 11 à 9
+    y: tableTop - rowHeight + 6,
+    size: 10,
     font: boldFont,
-    color: textColor,
+    color: rgb(1, 1, 1),
   })
 
   const numbers = extractPhoneEntries(formData.portability_numbers)
+  
+  // Debug: log pour vérifier l'extraction
+  console.log(`[RespOrg] Numéros extraits:`, numbers)
+  console.log(`[RespOrg] Type de portability_numbers:`, typeof formData.portability_numbers, Array.isArray(formData.portability_numbers))
 
   for (let i = 0; i < 10; i++) {
     const y = tableTop - rowHeight * (i + 2)
@@ -393,6 +542,43 @@ const appendPortabilityLetter = ({
     })
 
     const numberValue = numbers[i] ?? ''
+    
+    // Déterminer le Resp Org si le numéro commence par 8XX
+    const respOrg = numberValue ? getRespOrgFor8XX(numberValue) : null
+    const is8XX = respOrg !== null
+    const successColor = rgb(0, 0.7, 0.3)
+    
+    // Badge avec coche pour les numéros 8XX
+    const checkmarkX = margin + 85
+    if (is8XX) {
+      // Badge vert pour 8XX
+      page.drawRectangle({
+        x: checkmarkX - 3,
+        y: y + 1,
+        width: 16,
+        height: 16,
+        color: successColor,
+        opacity: 0.2,
+      })
+      page.drawRectangle({
+        x: checkmarkX - 3,
+        y: y + 1,
+        width: 16,
+        height: 16,
+        borderColor: successColor,
+        borderWidth: 1.5,
+      })
+      // Coche
+      page.drawText('✓', {
+        x: checkmarkX + 1,
+        y: y + 4,
+        size: 12,
+        font: boldFont,
+        color: successColor,
+      })
+    }
+    
+    // Afficher le numéro
     page.drawText(numberValue, {
       x: margin + 110,
       y: y + 4,
@@ -401,12 +587,39 @@ const appendPortabilityLetter = ({
       color: textColor,
     })
 
-    page.drawText('__________________________', {
+    // Afficher le Resp Org dans le champ FOURNISSEUR
+    const supplierText = respOrg ? respOrg : '__________________________'
+    
+    // Debug: log pour vérifier l'affichage
+    console.log(`[RespOrg] Ligne ${i + 1}: Numéro="${numberValue}", RespOrg="${respOrg}", Texte="${supplierText}", is8XX=${is8XX}`)
+    
+    // Badge pour Resp Org
+    if (respOrg) {
+      const badgeX = margin + numberColumnWidth + 8
+      page.drawRectangle({
+        x: badgeX,
+        y: y + 1,
+        width: Math.min(boldFont.widthOfTextAtSize(respOrg, 9) + 8, tableWidth - numberColumnWidth - 20),
+        height: 14,
+        color: rgb(0, 0.76, 0.85),
+        opacity: 0.15,
+      })
+      page.drawRectangle({
+        x: badgeX,
+        y: y + 1,
+        width: Math.min(boldFont.widthOfTextAtSize(respOrg, 9) + 8, tableWidth - numberColumnWidth - 20),
+        height: 14,
+        borderColor: rgb(0, 0.76, 0.85),
+        borderWidth: 1,
+      })
+    }
+    
+    page.drawText(supplierText, {
       x: margin + numberColumnWidth + 12,
       y: y + 4,
       size: 9,
-      font: regularFont,
-      color: textColor,
+      font: respOrg ? boldFont : regularFont,
+      color: respOrg ? rgb(0, 0.65, 0.75) : textColor,
     })
   }
 
@@ -489,6 +702,7 @@ export async function GET(request: NextRequest) {
       )
     `
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let submission: any = null
     let fetchError: unknown = null
 
@@ -576,15 +790,26 @@ export async function GET(request: NextRequest) {
     const LANDSCAPE_WIDTH = 792 // 11 pouces
     const LANDSCAPE_HEIGHT = 612 // 8.5 pouces
 
-    // Marges et espacements harmonisés
-    const headerHeight = 55
-    const sideMargin = 45
-    const bottomMargin = 45
-    const topMargin = 25 // Marge après l'en-tête
-    const baseLineGap = 3
-    const textColor = rgb(0.09, 0.19, 0.28)
+    // Palette de couleurs sophistiquée
+    const primaryColor = rgb(0, 0.76, 0.85) // Cyan principal
+    const primaryDark = rgb(0, 0.65, 0.75) // Cyan foncé
+    const secondaryColor = rgb(0.06, 0.35, 0.49) // Bleu foncé
     const accentColor = rgb(0.06, 0.35, 0.49)
-    const borderWidth = 0.6 // Épaisseur de bordure standardisée
+    const textColor = rgb(0.09, 0.19, 0.28) // Texte principal
+    const textLight = rgb(0.4, 0.4, 0.4) // Texte secondaire
+    const bgCard = rgb(0.97, 0.99, 1) // Fond carte
+    const borderColor = rgb(0, 0.58, 0.69)
+    const borderLight = rgb(0.85, 0.9, 0.95)
+
+    // Marges et espacements harmonisés
+    const headerHeight = 70 // Augmenté pour plus d'espace
+    const footerHeight = 35
+    const sideMargin = 45
+    const bottomMargin = 50 // Augmenté pour le footer
+    const topMargin = 30 // Marge après l'en-tête
+    const baseLineGap = 3
+    const borderWidth = 1.2 // Bordure plus visible
+    const shadowOffset = 2 // Décalage pour effet d'ombre
 
     type PageContext = {
       page: ReturnType<PDFDocument['addPage']>
@@ -613,38 +838,131 @@ export async function GET(request: NextRequest) {
 
     const columnLayout = getColumnLayout()
 
+    let pageNumber = 0
     const startNewPage = (): PageContext => {
+      pageNumber++
       const newPage = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
       const { width, height } = newPage.getSize()
 
+      // En-tête avec gradient simulé (plusieurs rectangles)
+      const gradientSteps = 3
+      const stepHeight = headerHeight / gradientSteps
+      for (let i = 0; i < gradientSteps; i++) {
+        const opacity = 0.95 - (i * 0.1)
+        newPage.drawRectangle({
+          x: 0,
+          y: height - headerHeight + (i * stepHeight),
+          width,
+          height: stepHeight,
+          color: primaryColor,
+          opacity,
+        })
+      }
+
+      // Ligne décorative en bas de l'en-tête
       newPage.drawRectangle({
         x: 0,
         y: height - headerHeight,
         width,
-        height: headerHeight,
-        color: rgb(0, 0.76, 0.85),
-        opacity: 0.9,
+        height: 3,
+        color: primaryDark,
+        opacity: 0.8,
       })
 
+      // Titre principal avec ombre
       const headerTitle = 'Dossier de Configuration Client'
-      const headerSize = 18 // Réduit de 22 à 18
+      const headerSize = 22
       const headerWidth = boldFont.widthOfTextAtSize(headerTitle, headerSize)
+      
+      // Ombre du titre
+      newPage.drawText(headerTitle, {
+        x: (width - headerWidth) / 2 + 1,
+        y: height - headerHeight + 20 - 1,
+        size: headerSize,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+        opacity: 0.2,
+      })
+      
+      // Titre principal
       newPage.drawText(headerTitle, {
         x: (width - headerWidth) / 2,
-        y: height - headerHeight + 12,
+        y: height - headerHeight + 20,
         size: headerSize,
         font: boldFont,
         color: rgb(1, 1, 1),
       })
 
-      // Dessiner une ligne de séparation entre les colonnes
+      // Sous-titre avec informations
+      const subtitle = clientInfo?.company || clientInfo?.full_name || 'Configuration'
+      const subtitleSize = 10
+      const subtitleWidth = regularFont.widthOfTextAtSize(subtitle, subtitleSize)
+      newPage.drawText(subtitle, {
+        x: (width - subtitleWidth) / 2,
+        y: height - headerHeight + 5,
+        size: subtitleSize,
+        font: regularFont,
+        color: rgb(1, 1, 1),
+        opacity: 0.9,
+      })
+
+      // Pied de page
+      const footerY = footerHeight
+      newPage.drawRectangle({
+        x: 0,
+        y: 0,
+        width,
+        height: footerHeight,
+        color: rgb(0.95, 0.96, 0.98),
+      })
+      
+      newPage.drawLine({
+        start: { x: 0, y: footerHeight },
+        end: { x: width, y: footerHeight },
+        thickness: 1,
+        color: borderLight,
+      })
+
+      // Numéro de page
+      const pageText = `Page ${pageNumber}`
+      const pageTextWidth = regularFont.widthOfTextAtSize(pageText, 9)
+      newPage.drawText(pageText, {
+        x: (width - pageTextWidth) / 2,
+        y: footerHeight / 2 - 3,
+        size: 9,
+        font: regularFont,
+        color: textLight,
+      })
+
+      // Logo/Info entreprise à droite
+      const companyInfo = 'Simplicom'
+      const companyInfoWidth = boldFont.widthOfTextAtSize(companyInfo, 8)
+      newPage.drawText(companyInfo, {
+        x: width - sideMargin - companyInfoWidth,
+        y: footerHeight / 2 - 3,
+        size: 8,
+        font: boldFont,
+        color: primaryColor,
+      })
+
+      // Date à gauche
+      const dateText = new Date().toLocaleDateString('fr-FR')
+      newPage.drawText(dateText, {
+        x: sideMargin,
+        y: footerHeight / 2 - 3,
+        size: 8,
+        font: regularFont,
+        color: textLight,
+      })
+
+      // Dessiner une ligne de séparation entre les colonnes (plus subtile)
       const separatorY = height - headerHeight - topMargin
       newPage.drawLine({
-        start: { x: sideMargin + columnLayout.columnWidth + columnLayout.columnGap / 2, y: bottomMargin },
+        start: { x: sideMargin + columnLayout.columnWidth + columnLayout.columnGap / 2, y: footerHeight + 5 },
         end: { x: sideMargin + columnLayout.columnWidth + columnLayout.columnGap / 2, y: separatorY },
         thickness: 0.5,
-        color: rgb(0.8, 0.8, 0.8),
-        opacity: 0.5,
+        color: borderLight,
+        opacity: 0.6,
       })
 
       return {
@@ -664,17 +982,20 @@ export async function GET(request: NextRequest) {
       const currentCol = column ?? context.currentColumn
       const currentY = currentCol === 'left' ? context.cursorYLeft : context.cursorYRight
       
-      if (currentY - requiredHeight < bottomMargin) {
+      // Prendre en compte le footer
+      const actualBottomMargin = bottomMargin + footerHeight
+      
+      if (currentY - requiredHeight < actualBottomMargin) {
         // Essayer de passer à l'autre colonne
         if (currentCol === 'left') {
           const rightColY = context.cursorYRight
-          if (rightColY - requiredHeight >= bottomMargin) {
+          if (rightColY - requiredHeight >= actualBottomMargin) {
             context.currentColumn = 'right'
             return
           }
         } else {
           const leftColYCheck = context.cursorYLeft
-          if (leftColYCheck - requiredHeight >= bottomMargin) {
+          if (leftColYCheck - requiredHeight >= actualBottomMargin) {
             context.currentColumn = 'left'
             return
           }
@@ -727,7 +1048,7 @@ export async function GET(request: NextRequest) {
         spacing = lineHeight(size),
         column,
       }: {
-        font?: typeof regularFont
+        font?: PDFFont
         size?: number
         indent?: number
         color?: ReturnType<typeof rgb>
@@ -778,11 +1099,11 @@ export async function GET(request: NextRequest) {
       if (column) context.currentColumn = column
       
       const fontSize = 9
-      const paddingTop = 14 // Padding interne supérieur
-      const paddingBottom = 14 // Padding interne inférieur
-      const horizontalPadding = 12 // Padding interne horizontal
-      const marginBefore = 10 // Marge externe avant la boîte
-      const marginAfter = 10 // Marge externe après la boîte
+      const paddingTop = 16 // Padding interne supérieur
+      const paddingBottom = 16 // Padding interne inférieur
+      const horizontalPadding = 14 // Padding interne horizontal
+      const marginBefore = 8 // Marge externe avant la boîte
+      const marginAfter = 12 // Marge externe après la boîte
       
       // Largeur disponible pour le texte (largeur de colonne - padding gauche et droite)
       const textWidth = availableWidth() - (horizontalPadding * 2)
@@ -795,30 +1116,48 @@ export async function GET(request: NextRequest) {
       const top = getCurrentY() - marginBefore // Espace avant la boîte
       const boxWidth = availableWidth()
       
+      // Effet d'ombre (simulé avec un rectangle gris décalé)
+      context.page.drawRectangle({
+        x: x + shadowOffset,
+        y: top - boxHeight - shadowOffset,
+        width: boxWidth,
+        height: boxHeight,
+        color: rgb(0.85, 0.85, 0.85),
+        opacity: 0.15,
+      })
+      
+      // Boîte principale avec fond et bordure
       context.page.drawRectangle({
         x,
         y: top - boxHeight,
         width: boxWidth,
         height: boxHeight,
-        color: rgb(0.97, 0.99, 1),
-        borderColor: rgb(0, 0.58, 0.69),
-        borderWidth: borderWidth, // Utilise la bordure standardisée
-        opacity: 0.98,
+        color: bgCard,
+        borderColor: borderColor,
+        borderWidth: borderWidth,
+      })
+
+      // Ligne décorative en haut de la boîte
+      context.page.drawRectangle({
+        x,
+        y: top - 2,
+        width: boxWidth,
+        height: 2,
+        color: primaryColor,
+        opacity: 0.3,
       })
 
       // S'assurer que le texte reste dans les limites
       let textY = top - paddingTop
       const textStartX = x + horizontalPadding
-      const maxTextX = x + boxWidth - horizontalPadding
       
       wrapped.forEach(line => {
         // Vérifier que la ligne ne dépasse pas la largeur disponible
         const lineWidth = regularFont.widthOfTextAtSize(line, fontSize)
-        let textX = textStartX
+        const textX = textStartX
         
-        // Si la ligne dépasse, la tronquer visuellement (ne devrait pas arriver avec wrapLine amélioré)
+        // Si la ligne dépasse, la tronquer visuellement
         if (lineWidth > textWidth) {
-          // Tronquer la ligne pour qu'elle tienne
           let truncatedLine = line
           while (regularFont.widthOfTextAtSize(truncatedLine, fontSize) > textWidth && truncatedLine.length > 0) {
             truncatedLine = truncatedLine.substring(0, truncatedLine.length - 1)
@@ -847,23 +1186,57 @@ export async function GET(request: NextRequest) {
 
     const drawSectionHeading = (title: string, column?: 'left' | 'right') => {
       if (column) context.currentColumn = column
-      const marginBefore = 15 // Marge avant la section
-      const marginAfterTitle = 12 // Marge après le titre
-      const marginBetweenLineAndTitle = 10 // Marge entre la ligne et le titre
-      const requiredSpace = 35 + marginBefore + marginAfterTitle
+      const marginBefore = 20 // Marge avant la section
+      const marginAfterTitle = 14 // Marge après le titre
+      const marginBetweenLineAndTitle = 12 // Marge entre la ligne et le titre
+      const badgeHeight = 18
+      const requiredSpace = badgeHeight + marginBefore + marginAfterTitle + marginBetweenLineAndTitle
       ensureSpace(requiredSpace, context.currentColumn)
       
       const x = getCurrentX()
       const y = getCurrentY() - marginBefore // Marge avant la ligne
       
-      // Dessiner un diviseur pour la colonne actuelle seulement
-      const colWidth = availableWidth()
-      drawDivider(pdfDoc, context.page, y, x, rgb(0, 0.7, 0.82), colWidth)
+      // Badge de section avec fond coloré
+      const badgeWidth = Math.min(boldFont.widthOfTextAtSize(title, 11) + 16, availableWidth())
+      context.page.drawRectangle({
+        x,
+        y: y - badgeHeight,
+        width: badgeWidth,
+        height: badgeHeight,
+        color: primaryColor,
+        opacity: 0.15,
+      })
       
-      setCurrentY(y - marginBetweenLineAndTitle) // Marge entre la ligne et le titre
-      drawParagraph(title, { font: boldFont, size: 12, color: accentColor, column: context.currentColumn })
-      const currentY = getCurrentY()
-      setCurrentY(currentY - marginAfterTitle) // Marge après le titre
+      // Bordure du badge
+      context.page.drawRectangle({
+        x,
+        y: y - badgeHeight,
+        width: badgeWidth,
+        height: badgeHeight,
+        borderColor: primaryColor,
+        borderWidth: 1.5,
+      })
+      
+      // Icône/symbole avant le titre (simulé avec un rectangle)
+      const iconSize = 8
+      context.page.drawRectangle({
+        x: x + 6,
+        y: y - badgeHeight + (badgeHeight - iconSize) / 2,
+        width: iconSize,
+        height: iconSize,
+        color: primaryColor,
+      })
+      
+      // Titre de section dans le badge
+      context.page.drawText(title, {
+        x: x + 18,
+        y: y - badgeHeight + 5,
+        size: 11,
+        font: boldFont,
+        color: secondaryColor,
+      })
+      
+      setCurrentY(y - badgeHeight - marginAfterTitle) // Marge après le badge
     }
 
     const formatPrimitive = (value: unknown): string => {
@@ -933,10 +1306,37 @@ export async function GET(request: NextRequest) {
       if (normalized.length === 0) return
       if (column) context.currentColumn = column
       const number = questionIndex++
-      const questionMargin = 6 // Marge avant la question
+      const questionMargin = 8 // Marge avant la question
       const currentY = getCurrentY()
       setCurrentY(currentY - questionMargin)
-      drawParagraph(`${number}. ${label}`, { font: boldFont, size: 10, color: textColor, column: context.currentColumn })
+      
+      // Badge numéro de question
+      const x = getCurrentX()
+      const badgeY = getCurrentY()
+      context.page.drawRectangle({
+        x,
+        y: badgeY - 12,
+        width: 20,
+        height: 20,
+        color: primaryColor,
+        opacity: 0.2,
+      })
+      context.page.drawText(`${number}`, {
+        x: x + 7,
+        y: badgeY - 10,
+        size: 10,
+        font: boldFont,
+        color: primaryColor,
+      })
+      
+      // Label de la question avec indentation
+      drawParagraph(label, { 
+        font: boldFont, 
+        size: 10, 
+        color: textColor, 
+        indent: 24,
+        column: context.currentColumn 
+      })
       drawAnswerBox(normalized, context.currentColumn)
     }
 
@@ -1217,7 +1617,13 @@ export async function GET(request: NextRequest) {
       }
       if (formData.portability_numbers) {
         alternateColumn()
-        drawQuestionBlock('Numéros à porter', formData.portability_numbers)
+        // Gérer à la fois l'ancien format (string) et le nouveau format (array)
+        const numbersText = Array.isArray(formData.portability_numbers)
+          ? formData.portability_numbers.filter(n => n && n.trim()).join('\n')
+          : String(formData.portability_numbers)
+        if (numbersText) {
+          drawQuestionBlock('Numéros à porter', numbersText)
+        }
       }
       if (formData.portability_requested_date) {
         alternateColumn()

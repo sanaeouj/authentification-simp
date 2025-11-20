@@ -17,9 +17,9 @@ export async function getCurrentUser(): Promise<User | null> {
       // On les traite comme une session invalide et retournons null
       // Cela permettra à requireAuth() de rediriger vers la page de connexion
       const isRefreshTokenError = 
-        error.message?.includes('Refresh Token') || 
-        error.message?.includes('Invalid Refresh Token') ||
-        error.message?.includes('Refresh Token Not Found')
+        (error.message && typeof error.message === 'string' && error.message.includes('Refresh Token')) || 
+        (error.message && typeof error.message === 'string' && error.message.includes('Invalid Refresh Token')) ||
+        (error.message && typeof error.message === 'string' && error.message.includes('Refresh Token Not Found'))
       
       if (isRefreshTokenError) {
         // Session expirée ou invalide, retourner null sans logger (c'est attendu)

@@ -30,7 +30,6 @@ export default async function AdminSubmissionsPage(): Promise<React.JSX.Element>
     redirect('/unauthorized')
   }
 
-  // Récupérer toutes les soumissions avec les détails du client
   const { data: submissions, error: submissionsError } = await supabase
     .from('form_submissions')
     .select(
@@ -60,32 +59,43 @@ export default async function AdminSubmissionsPage(): Promise<React.JSX.Element>
   const submissionsWithDetails = (submissions ?? []) as SubmissionWithDetails[]
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#00C3D9]/5 via-white to-[#FF8A00]/5">
-      <header className="glass shadow-lg border-b border-[#00C3D9]/20">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen">
+      <main className="max-w-7xl mx-auto py-8 px-6 sm:px-8 lg:px-12">
+        {/* Page Header */}
+        <div className="mb-10 animate-fade-in">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-[#1D3B4E]">Soumissions de Formulaires</h1>
-              <p className="text-sm text-[#1D3B4E]/60">Gestion des fichiers PDF et MP3</p>
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-[#1D3B4E] mb-2">
+                Soumissions de <span className="text-gradient-primary">Formulaires</span>
+              </h1>
+              <p className="text-base text-[#1D3B4E]/70">Gestion des fichiers PDF et MP3</p>
             </div>
             <Link
               href="/admin/dashboard"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#00C3D9] hover:bg-[#00A8BA] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
+              className="btn-secondary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold shadow-lg"
             >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
               Retour au tableau de bord
             </Link>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {submissionsWithDetails.length === 0 ? (
-          <div className="glass p-6 rounded-xl shadow text-center text-[#1D3B4E]/70">
-            Aucune soumission de formulaire pour le moment.
+          <div className="card-glass text-center py-16 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#00C3D9]/10 mb-6">
+              <svg className="w-10 h-10 text-[#00C3D9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-[#1D3B4E] mb-2">Aucune soumission</h3>
+            <p className="text-base text-[#1D3B4E]/70">
+              Aucune soumission de formulaire pour le moment.
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
-            {submissionsWithDetails.map(submission => {
+            {submissionsWithDetails.map((submission, index) => {
               const client = submission.magic_links?.clients
               const formData = submission.data as {
                 portability_authorization_letter?: string
@@ -102,7 +112,11 @@ export default async function AdminSubmissionsPage(): Promise<React.JSX.Element>
                 formData.english_recording_url
 
               return (
-                <div key={submission.id} className="glass rounded-xl shadow-lg border border-[#00C3D9]/10">
+                <div 
+                  key={submission.id} 
+                  className="card-glass glass-hover animate-fade-in"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
                   <div className="p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                       <div>
@@ -126,11 +140,14 @@ export default async function AdminSubmissionsPage(): Promise<React.JSX.Element>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={submission.status} />
                         <Link
-                          href={`/api/forms/download?submission_id=${submission.id}`}
+                          href={`/api/forms/download?submissionId=${submission.id}`}
                           target="_blank"
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                          className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold"
                         >
-                          📄 Télécharger PDF
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Télécharger PDF
                         </Link>
                       </div>
                     </div>
@@ -279,17 +296,23 @@ function FileDownloadCard({ title, url, type }: { title: string; url: string; ty
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-[#00C3D9] hover:bg-[#00A8BA] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
+          className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold"
           title="Ouvrir dans un nouvel onglet"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
           Ouvrir
         </a>
         <a
           href={url}
           download
-          className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-[#1D3B4E] bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
+          className="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold"
           title="Télécharger le fichier"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
           Télécharger
         </a>
       </div>

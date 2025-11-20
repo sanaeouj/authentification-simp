@@ -95,9 +95,9 @@ export default async function ClientDashboardWithToken({
   const isDisabled = fullLink.status !== 'pending'
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#00C3D9]/10 via-white to-[#FF8A00]/10 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-linear-to-br from-[#00C3D9]/10 via-white to-[#FF8A00]/10 py-16 px-6 sm:px-8 lg:px-12">
       <div className="max-w-3xl mx-auto">
-        <header className="mb-8 text-center">
+        <header className="mb-12 text-center">
           <h1 className="text-3xl font-bold text-[#1D3B4E]">Espace Client</h1>
           <p className="mt-2 text-[#1D3B4E]/70">
             Bonjour {profile.full_name ?? client.full_name}, complétez le formulaire ci-dessous.
@@ -110,7 +110,7 @@ export default async function ClientDashboardWithToken({
           )}
         </header>
 
-        <section className="glass rounded-2xl shadow-xl p-6">
+        <section className="glass rounded-2xl shadow-xl p-8 sm:p-10">
           <ClientForm link={fullLink} disabled={isDisabled} />
         </section>
       </div>

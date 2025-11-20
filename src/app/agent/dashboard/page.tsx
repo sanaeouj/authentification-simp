@@ -1,8 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth, getAgentProfile } from '@/lib/utils/auth'
 import type { Client, MagicLink } from '@/lib/types/database.types'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import KPIWidget from '@/components/dashboard/KPIWidget'
+import StatusOverviewCard from '@/components/dashboard/StatusOverviewCard'
+import ClientTableWrapper from '@/components/dashboard/ClientTableWrapper'
+import ActivityTimeline from '@/components/dashboard/ActivityTimeline'
 
 const isActiveMagicLink = (status: MagicLink['status']): boolean => status === 'pending'
 
@@ -14,7 +21,7 @@ type ClientWithMeta = Client & {
 
 export default async function AgentDashboard(): Promise<React.JSX.Element> {
   // Vérification de l'authentification
-  const user = await requireAuth()
+  await requireAuth()
   const agent = await getAgentProfile()
 
   if (!agent) redirect('/unauthorized')
@@ -22,12 +29,7 @@ export default async function AgentDashboard(): Promise<React.JSX.Element> {
   // Récupération des clients avec leurs magic links et du profil agent
   const supabase = await createClient()
 
-  const [agentProfileResult, clientsResult, submissionsResult] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', agent.id)
-      .single(),
+  const [clientsResult, submissionsResult] = await Promise.all([
     supabase
       .from('clients')
       .select(`
@@ -39,10 +41,10 @@ export default async function AgentDashboard(): Promise<React.JSX.Element> {
       .from('form_submissions')
       .select('id, submitted_at, magic_links(client_id)')
       .eq('magic_links.agent_id', agent.id)
-      .order('submitted_at', { ascending: false }),
+      .order('submitted_at', { ascending: false })
+      .limit(5),
   ])
 
-  const agentProfile = agentProfileResult.data as { full_name: string | null; email: string | null } | null
   const clientsRaw = clientsResult.data as (Client & { magic_links: MagicLink[] })[] | null
   const submissions = submissionsResult.data as {
     id: string
@@ -88,107 +90,111 @@ export default async function AgentDashboard(): Promise<React.JSX.Element> {
     acc + client.magic_links.filter(link => link.status === 'used').length, 0
   ) ?? 0
 
-  const agentDisplayName = agentProfile?.full_name ?? user.email ?? 'Agent'
-  const agentEmail = agentProfile?.email ?? user.email ?? ''
+  // Organisation des clients par statut
+  const activeClients = clients.filter(c => c.status === 'active')
+  const inactiveClients = clients.filter(c => c.status === 'inactive')
+  const archivedClients = clients.filter(c => c.status === 'archived')
+
+  // Activités récentes
+  const recentSubmissions = (submissions ?? []).slice(0, 5).map(sub => {
+    const client = clients.find(c => c.id === sub.magic_links?.client_id)
+    return {
+      id: sub.id,
+      submitted_at: sub.submitted_at,
+      client_name: client?.full_name ?? 'Client inconnu',
+      client_id: sub.magic_links?.client_id ?? null,
+    }
+  })
+
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#00C3D9]/5 via-white to-[#FF8A00]/5">
+    <div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5">
       {/* Header */}
-      <header className="glass shadow-lg border-b border-[#00C3D9]/20">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-[#1D3B4E]">
-              Bienvenue, {agentDisplayName}
-            </h1>
-            {agentEmail && (
-              <p className="text-sm text-[#1D3B4E]/70">
-                {agentEmail}
+      <header className="border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Dashboard Agent</h1>
+              <p className="text-muted-foreground mt-1">
+                Gérez vos clients et vos liens magiques
               </p>
-            )}
+            </div>
+            <Button asChild className="gap-2">
+              <Link href="/agent/clients/new">
+                <Plus className="h-4 w-4" />
+                Nouveau client
+              </Link>
+            </Button>
           </div>
-          <Link
-            href="/agent/clients/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#00C3D9] hover:bg-[#00C3D9]/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
-          >
-            Créer un Client
-          </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <StatsCard
-            title="Total Clients"
-            value={totalClients}
-            icon="👥"
-          />
-          <StatsCard
-            title="Liens Actifs"
-            value={activeLinks}
-            icon="🔗"
-          />
-          <StatsCard
-            title="Formulaires Complétés"
-            value={completedForms}
-            icon="📝"
-          />
-        </div>
+      <main className="container mx-auto px-4 py-8 space-y-8">
 
-        {/* Clients Table */}
-        <div className="mt-8 flex flex-col">
-          <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div className="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-              <div className="glass shadow-lg overflow-hidden border border-[#00C3D9]/20 sm:rounded-xl">
-                <table className="min-w-full divide-y divide-[#00C3D9]/10">
-                  <thead className="bg-[#1D3B4E]/5">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-[#1D3B4E] uppercase tracking-wider">
-                        Client
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-[#1D3B4E] uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-[#1D3B4E] uppercase tracking-wider">
-                        Liens Actifs
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-[#1D3B4E] uppercase tracking-wider">
-                        Formulaires Complétés
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-[#1D3B4E] uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="glass divide-y divide-[#00C3D9]/10">
-                    {clients?.map((client) => (
-                      <tr key={client.id} className="hover:bg-[#00C3D9]/5 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-[#1D3B4E]">
-                            {client.full_name}
-                          </div>
-                          <div className="text-sm text-[#1D3B4E]/70">
-                            {client.email}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <StatusBadge status={client.status} />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#1D3B4E]/70">
-                          {client.magic_links.filter(link => isActiveMagicLink(link.status)).length}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#1D3B4E]/70">
-                          {client.magic_links.filter(link => link.status === 'used').length}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#1D3B4E]/70">
-                          <AgentMagicLinkActions client={client} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        {/* KPI Section */}
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Vue d&apos;ensemble</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <KPIWidget
+              title="Total Clients"
+              value={totalClients}
+              color="blue"
+              icon="Users"
+            />
+            <KPIWidget
+              title="Liens Actifs"
+              value={activeLinks}
+              color="cyan"
+              icon="Link2"
+            />
+            <KPIWidget
+              title="Formulaires Complétés"
+              value={completedForms}
+              color="green"
+              icon="FileCheck"
+            />
+          </div>
+        </section>
+
+        {/* Status Overview */}
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Statut des clients</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <StatusOverviewCard
+              title="Clients Actifs"
+              count={activeClients.length}
+              color="green"
+            />
+            <StatusOverviewCard
+              title="Clients Inactifs"
+              count={inactiveClients.length}
+              color="yellow"
+            />
+            <StatusOverviewCard
+              title="Clients Archivés"
+              count={archivedClients.length}
+              color="gray"
+            />
+          </div>
+        </section>
+
+        {/* Clients Table and Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Clients récents</h2>
+              <ClientTableWrapper clients={clients} />
+            </Card>
+          </div>
+
+          <div>
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Activité récente</h2>
+              <ActivityTimeline
+                activities={recentSubmissions}
+                clients={clients}
+              />
+            </Card>
           </div>
         </div>
       </main>
@@ -196,49 +202,3 @@ export default async function AgentDashboard(): Promise<React.JSX.Element> {
   )
 }
 
-// Composants utilitaires typés
-type StatsCardProps = {
-  title: string
-  value: number
-  icon: string
-}
-
-function StatsCard({ title, value, icon }: StatsCardProps) {
-  return (
-    <div className="glass overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-shadow">
-      <div className="p-5">
-        <div className="flex items-center">
-          <div className="shrink-0 text-3xl">{icon}</div>
-          <div className="ml-5 w-0 flex-1">
-            <dt className="text-sm font-medium text-[#1D3B4E]/70 truncate">
-              {title}
-            </dt>
-            <dd className="text-2xl font-bold text-[#1D3B4E]">
-              {value}
-            </dd>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-type StatusBadgeProps = {
-  status: Client['status']
-}
-
-function StatusBadge({ status }: StatusBadgeProps) {
-  const colors: Record<Client['status'], string> = {
-    active: 'bg-[#00C3D9]/20 text-[#00C3D9] border border-[#00C3D9]/30',
-    inactive: 'bg-[#FF8A00]/20 text-[#FF8A00] border border-[#FF8A00]/30',
-    archived: 'bg-[#1D3B4E]/20 text-[#1D3B4E] border border-[#1D3B4E]/30',
-  }
-
-  return (
-    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${colors[status]}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
-}
-
-import AgentMagicLinkActions from '@/components/AgentMagicLinkActions'

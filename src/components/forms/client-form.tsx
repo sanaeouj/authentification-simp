@@ -16,7 +16,7 @@ type YesNoChoice = 'yes' | 'no' | ''
 type RecordingUploadStatus = 'idle' | 'loading' | 'success' | 'error'
 type RecordingField = 'french' | 'english'
 type DocumentUploadStatus = 'idle' | 'loading' | 'success' | 'error'
-type PortabilityDocumentField = 'authorization_letter' | 'last_invoice'
+type PortabilityDocumentField = 'authorization_letter' | 'last_invoice' | 'eightxx_document'
 
 interface PostConfiguration {
   label: string
@@ -53,11 +53,12 @@ interface FormData {
   portability_contact_name: string
   portability_contact_email: string
   portability_account_reference: string
-  portability_numbers: string
+  portability_numbers: string[]
   portability_requested_date: string
   portability_lines_count: string
   portability_authorization_letter: string
   portability_last_invoice: string
+  portability_eightxx_document: string
   french_recording_url: string
   english_recording_url: string
 }
@@ -95,11 +96,12 @@ const createInitialFormData = (): FormData => ({
   portability_contact_name: '',
   portability_contact_email: '',
   portability_account_reference: '',
-  portability_numbers: '',
+  portability_numbers: [],
   portability_requested_date: '',
   portability_lines_count: '',
   portability_authorization_letter: '',
   portability_last_invoice: '',
+  portability_eightxx_document: '',
   french_recording_url: '',
   english_recording_url: '',
 })
@@ -110,6 +112,8 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
   const [error, setError] = useState<string>('')
   const [success, setSuccess] = useState<string>('')
   const [isReadOnly, setIsReadOnly] = useState<boolean>(disabled)
+  const [dataRestored, setDataRestored] = useState<boolean>(false)
+  const [lastSaveTime, setLastSaveTime] = useState<string>('')
   const [recordingUploadStatus, setRecordingUploadStatus] = useState<Record<RecordingField, RecordingUploadStatus>>({
     french: 'idle',
     english: 'idle',
@@ -123,12 +127,14 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
   >({
     authorization_letter: 'idle',
     last_invoice: 'idle',
+    eightxx_document: 'idle',
   })
   const [portabilityUploadError, setPortabilityUploadError] = useState<
     Record<PortabilityDocumentField, string>
   >({
     authorization_letter: '',
     last_invoice: '',
+    eightxx_document: '',
   })
   const draftStorageKey = `client-form-draft-${link.token}`
 
@@ -136,6 +142,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
     setIsReadOnly(disabled)
   }, [disabled])
 
+  // Charger les données sauvegardées au montage du composant
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (isReadOnly) {
@@ -147,32 +154,99 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
       const saved = window.localStorage.getItem(draftStorageKey)
       if (saved) {
         const parsed = JSON.parse(saved) as Partial<FormData>
-        setFormData(prev => ({ ...prev, ...parsed }))
+        setFormData(prev => {
+          // Fusionner intelligemment les données sauvegardées avec les valeurs par défaut
+          const merged = { ...prev, ...parsed }
+          // S'assurer que post_configurations est un tableau valide
+          if (parsed.post_configurations && Array.isArray(parsed.post_configurations)) {
+            merged.post_configurations = parsed.post_configurations
+          }
+          // Convertir portability_numbers de string (ancien format) vers array si nécessaire
+          if (parsed.portability_numbers !== undefined) {
+            const linesCount = parseInt(parsed.portability_lines_count || merged.portability_lines_count || '0', 10) || 0
+            if (typeof parsed.portability_numbers === 'string') {
+              // Ancien format : convertir le string en tableau
+              if (linesCount > 0) {
+                // Diviser par lignes si c'était un textarea
+                const portabilityNumbersStr = parsed.portability_numbers as string
+                const numbers = portabilityNumbersStr.split('\n').filter((n: string) => n.trim())
+                // S'assurer qu'on a le bon nombre d'éléments
+                while (numbers.length < linesCount) {
+                  numbers.push('')
+                }
+                merged.portability_numbers = numbers.slice(0, linesCount)
+              } else {
+                merged.portability_numbers = []
+              }
+            } else if (Array.isArray(parsed.portability_numbers)) {
+              // Nouveau format : s'assurer que le tableau a le bon nombre d'éléments
+              if (linesCount > 0) {
+                const numbers = [...parsed.portability_numbers]
+                while (numbers.length < linesCount) {
+                  numbers.push('')
+                }
+                merged.portability_numbers = numbers.slice(0, linesCount)
+              } else {
+                merged.portability_numbers = []
+              }
+            }
+          } else if (parsed.portability_lines_count) {
+            // Si portability_lines_count est défini mais pas portability_numbers, initialiser le tableau
+            const linesCount = parseInt(parsed.portability_lines_count, 10) || 0
+            merged.portability_numbers = Array(linesCount).fill('')
+          }
+          return merged
+        })
+        setDataRestored(true)
+        // Masquer le message après 5 secondes
+        setTimeout(() => setDataRestored(false), 5000)
       }
     } catch (storageError) {
       console.error('Impossible de charger le brouillon du formulaire', storageError)
     }
   }, [draftStorageKey, isReadOnly])
 
+  // Sauvegarder automatiquement avec debounce pour éviter trop de sauvegardes
   useEffect(() => {
     if (typeof window === 'undefined' || isReadOnly) return
-    try {
-      window.localStorage.setItem(draftStorageKey, JSON.stringify(formData))
-    } catch (storageError) {
-      console.error('Impossible de sauvegarder le brouillon du formulaire', storageError)
+    
+    const timeoutId = setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftStorageKey, JSON.stringify(formData))
+        // Mettre à jour l'heure de dernière sauvegarde
+        const now = new Date()
+        const timeString = now.toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+        setLastSaveTime(timeString)
+      } catch (storageError) {
+        console.error('Impossible de sauvegarder le brouillon du formulaire', storageError)
+      }
+    }, 500) // Debounce de 500ms
+
+    return () => clearTimeout(timeoutId)
+  }, [formData, draftStorageKey, isReadOnly])
+
+  // Sauvegarder aussi avant de quitter la page
+  useEffect(() => {
+    if (typeof window === 'undefined' || isReadOnly) return
+
+    const handleBeforeUnload = () => {
+      try {
+        window.localStorage.setItem(draftStorageKey, JSON.stringify(formData))
+      } catch (storageError) {
+        console.error('Impossible de sauvegarder le brouillon avant de quitter', storageError)
+      }
     }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [formData, draftStorageKey, isReadOnly])
 
   const inputDisabledClass = isReadOnly ? 'bg-gray-100 text-gray-500' : ''
   const controlDisabledClass = isReadOnly ? 'cursor-not-allowed opacity-70' : ''
-
-  const daysRemaining: number = (() => {
-    if (!link.expires_at) return 0
-    const expires = new Date(link.expires_at)
-    if (isNaN(expires.getTime())) return 0
-    const diffMs = expires.getTime() - Date.now()
-    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
-  })()
 
   const handleFieldChange = (
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -259,12 +333,39 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
         portability_contact_name: value === 'yes' ? prev.portability_contact_name : '',
         portability_contact_email: value === 'yes' ? prev.portability_contact_email : '',
         portability_account_reference: value === 'yes' ? prev.portability_account_reference : '',
-        portability_numbers: value === 'yes' ? prev.portability_numbers : '',
+        portability_numbers: value === 'yes' ? prev.portability_numbers : [],
         portability_requested_date: value === 'yes' ? prev.portability_requested_date : '',
         portability_lines_count: value === 'yes' ? prev.portability_lines_count : '',
         portability_authorization_letter: value === 'yes' ? prev.portability_authorization_letter : '',
         portability_last_invoice: value === 'yes' ? prev.portability_last_invoice : '',
+        portability_eightxx_document: value === 'yes' ? prev.portability_eightxx_document : '',
       }))
+      return
+    }
+
+    if (name === 'portability_lines_count') {
+      const linesCount = parseInt(value, 10) || 0
+      setFormData(prev => {
+        const currentNumbers = Array.isArray(prev.portability_numbers) ? prev.portability_numbers : []
+        let newNumbers: string[]
+        
+        if (linesCount > currentNumbers.length) {
+          // Ajouter des champs vides si on augmente le nombre
+          newNumbers = [...currentNumbers, ...Array(linesCount - currentNumbers.length).fill('')]
+        } else if (linesCount < currentNumbers.length) {
+          // Retirer des champs si on diminue le nombre
+          newNumbers = currentNumbers.slice(0, linesCount)
+        } else {
+          // Garder les mêmes champs
+          newNumbers = currentNumbers
+        }
+        
+        return {
+          ...prev,
+          portability_lines_count: value,
+          portability_numbers: newNumbers,
+        }
+      })
       return
     }
 
@@ -278,6 +379,15 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
         idx === index ? { ...post, [field]: value } : post
       )
       return { ...prev, post_configurations: updated }
+    })
+  }
+
+  const handlePortabilityNumberChange = (index: number, value: string): void => {
+    if (isReadOnly) return
+    setFormData(prev => {
+      const updatedNumbers = [...prev.portability_numbers]
+      updatedNumbers[index] = value
+      return { ...prev, portability_numbers: updatedNumbers }
     })
   }
 
@@ -299,7 +409,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
     const isMp3 =
       file.type === 'audio/mpeg' ||
       file.type === 'audio/mp3' ||
-      file.name.toLowerCase().endsWith('.mp3')
+      (file.name && file.name.toLowerCase().endsWith('.mp3'))
 
     if (!isMp3) {
       setRecordingUploadStatus(prev => ({ ...prev, [field]: 'error' }))
@@ -331,10 +441,11 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
         throw new Error(json.error ?? 'Échec du téléversement.')
       }
 
+      const recordingUrl = json.url ?? ''
       setFormData(prev => ({
         ...prev,
-        french_recording_url: field === 'french' ? json.url : prev.french_recording_url,
-        english_recording_url: field === 'english' ? json.url : prev.english_recording_url,
+        french_recording_url: field === 'french' ? recordingUrl : prev.french_recording_url,
+        english_recording_url: field === 'english' ? recordingUrl : prev.english_recording_url,
       }))
       setRecordingUploadStatus(prev => ({ ...prev, [field]: 'success' }))
     } catch (err) {
@@ -355,6 +466,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
     const fieldMap: Record<PortabilityDocumentField, keyof FormData> = {
       authorization_letter: 'portability_authorization_letter',
       last_invoice: 'portability_last_invoice',
+      eightxx_document: 'portability_eightxx_document',
     }
 
     if (!files || files.length === 0) {
@@ -369,7 +481,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
 
     const file = files[0]
     const isPdf =
-      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      file.type === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'))
 
     if (!isPdf) {
       setPortabilityUploadStatus(prev => ({ ...prev, [field]: 'error' }))
@@ -473,17 +585,32 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
 
       if (
         portabilityUploadStatus.authorization_letter === 'loading' ||
-        portabilityUploadStatus.last_invoice === 'loading'
+        portabilityUploadStatus.last_invoice === 'loading' ||
+        portabilityUploadStatus.eightxx_document === 'loading'
       ) {
         setError('Veuillez attendre la fin du téléversement des documents PDF.')
         setLoading(false)
         return
       }
 
-      if (recordingUploadStatus.french === 'loading' || recordingUploadStatus.english === 'loading') {
-        setError('Veuillez attendre la fin du téléversement des fichiers audio.')
-        setLoading(false)
-        return
+      // Vérifier que les documents de portabilité sont téléversés si la portabilité est sélectionnée
+      if (needsPortabilityDetails) {
+        if (!formData.portability_authorization_letter) {
+          setError('Veuillez téléverser la lettre d\'autorisation signée (PDF).')
+          setLoading(false)
+          return
+        }
+        if (!formData.portability_last_invoice) {
+          setError('Veuillez téléverser la dernière facture opérateur (PDF).')
+          setLoading(false)
+          return
+        }
+        // Vérifier le document 8xx si nécessaire
+        if (hasEightxxNumber && !formData.portability_eightxx_document) {
+          setError('Veuillez téléverser le document Resp Org form (PDF) pour les numéros 8xx.')
+          setLoading(false)
+          return
+        }
       }
 
       const response = await fetch('/api/forms/submit', {
@@ -515,10 +642,21 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
     }
   }
 
-  const agentContact = link.clients.agents?.phone ?? ''
   const notifyAdminSelected = formData.notify_admin === 'yes'
   const needsPortabilityDetails = formData.portability_choice === 'yes'
   const showIpDeviceDetails = formData.ip_phone_choice === 'keep'
+  const showPhoneNumbersToKeep = formData.phone_numbers_choice === 'keep'
+  
+  // Vérifier si au moins un numéro commence par 811, 822, 833, 844, 855, 866, 877, 888, ou 899
+  const hasEightxxNumber = formData.portability_numbers.some(num => {
+    if (!num || typeof num !== 'string') return false
+    const cleaned = num.replace(/\D/g, '') // Enlever tous les caractères non numériques
+    if (cleaned.length < 3) return false
+    const prefix = cleaned.substring(0, 3)
+    const validPrefixes = ['811', '822', '833', '844', '855', '866', '877', '888', '899']
+    return validPrefixes.includes(prefix)
+  })
+  
   const showFrenchMenuScript =
     formData.include_company_menu === 'fr' || formData.include_company_menu === 'both'
   const showEnglishMenuScript =
@@ -531,47 +669,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
 
   return (
     <div>
-      <div className="mb-6 rounded-md border bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Configuration pour {link.clients.full_name}
-        </h2>
-        <div className="mt-1 text-sm text-gray-600 space-y-1">
-          <p>
-            {link.clients.company ? (
-              <>
-                Entreprise associée :{' '}
-                <span className="font-medium text-gray-900">{link.clients.company}</span>
-              </>
-            ) : (
-              <>Aucune entreprise associée renseignée.</>
-            )}
-          </p>
-          <p>
-            {agentContact ? (
-              <>
-                Contact agent :{' '}
-                <span className="font-medium text-gray-900">{agentContact}</span>
-              </>
-            ) : (
-              <>Contact agent à confirmer.</>
-            )}
-          </p>
-          <p>
-            {link.expires_at ? (
-              <>
-                Lien valide encore{' '}
-                <span className="font-medium">{daysRemaining}</span> jour(s) (expiration le{' '}
-                <span className="font-medium">{new Date(link.expires_at).toLocaleString()}</span>
-                ).
-              </>
-            ) : (
-              <>Ce lien n&apos;a pas de date d&apos;expiration connue.</>
-            )}
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-10 rounded-lg bg-white p-8 shadow-lg border border-gray-200">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700 text-center">
             {error}
@@ -589,17 +687,45 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
           </div>
         )}
 
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Informations de facturation
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Veuillez fournir les informations nécessaires à votre facturation.
-            </p>
+        {!isReadOnly && (
+          <div className="rounded-lg border border-[#00C3D9]/30 bg-[#E0F7FA] p-4 flex items-start gap-3">
+            <svg className="w-6 h-6 text-[#00C3D9] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <div className="flex-1">
+              <h3 className="font-semibold text-[#1D3B4E] mb-1">Sauvegarde automatique activée</h3>
+              <p className="text-sm text-[#1D3B4E]/80 mb-2">
+                Vos données sont sauvegardées automatiquement. Vous pouvez fermer cette page et revenir plus tard, vos informations seront conservées.
+              </p>
+              {lastSaveTime && (
+                <p className="text-xs text-[#1D3B4E]/70">
+                  Dernière sauvegarde: {lastSaveTime}
+                </p>
+              )}
+            </div>
           </div>
+        )}
 
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 px-4">
+        {dataRestored && !isReadOnly && (
+          <div className="rounded-lg border-2 border-green-300 bg-green-50 p-3 text-sm text-green-700 flex items-center gap-2 animate-fade-in">
+            <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              <strong>Données restaurées :</strong> Vos informations précédemment saisies ont été restaurées automatiquement.
+            </span>
+          </div>
+        )}
+
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Informations de facturation
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Veuillez fournir les informations nécessaires à votre facturation.
+          </p>
+
+          <div className="grid gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label
                 htmlFor="billing_company_name"
@@ -710,23 +836,20 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
           </div>
         </section>
 
-        {formData.phone_numbers_choice && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Numéros de téléphone
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Indiquez votre préférence pour les numéros à conserver ou à activer.
-            </p>
-          </div>
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Numéros de téléphone
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Indiquez votre préférence pour les numéros à conserver ou à activer.
+          </p>
 
-          <div className="mt-6 space-y-6 px-4">
-            <fieldset className="border-2 border-gray-300 rounded-lg p-4 bg-white">
-              <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
-                Voulez-vous activer de nouveaux numéros ou conserver vos numéros actuels ? *
-              </legend>
-              <div className="mt-4 space-y-3">
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-3">
+                Voulez-vous activer de nouveaux numéros ou conserver vos numéros actuels ?*
+              </p>
+              <div className="space-y-3">
                 <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                   <input
                     type="radio"
@@ -754,46 +877,44 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   <span className="text-sm font-medium text-gray-700">Activer de nouveaux numéros</span>
                 </label>
               </div>
-            </fieldset>
-
-            <div>
-              <label
-                htmlFor="phone_numbers_to_keep"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
-                Veuillez indiquer tous les numéros de téléphone à conserver et transférer *
-              </label>
-              <textarea
-                id="phone_numbers_to_keep"
-                name="phone_numbers_to_keep"
-                required={formData.phone_numbers_choice === 'keep'}
-                rows={4}
-                value={formData.phone_numbers_to_keep}
-                onChange={handleFieldChange}
-                className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
-                placeholder="Entrez les numéros séparés par des virgules ou sur des lignes différentes"
-                disabled={isReadOnly}
-              />
             </div>
+
+            {showPhoneNumbersToKeep && (
+              <div>
+                <label
+                  htmlFor="phone_numbers_to_keep"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Veuillez indiquer tous les numéros de téléphone à conserver et transférer *
+                </label>
+                <textarea
+                  id="phone_numbers_to_keep"
+                  name="phone_numbers_to_keep"
+                  required={formData.phone_numbers_choice === 'keep'}
+                  rows={4}
+                  value={formData.phone_numbers_to_keep}
+                  onChange={handleFieldChange}
+                  className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors resize-none ${inputDisabledClass}`}
+                  placeholder="Entrez les numéros séparés par des virgules ou sur des lignes différentes"
+                  disabled={isReadOnly}
+                />
+              </div>
+            )}
           </div>
         </section>
-        )}
 
-        {formData.portability_choice && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Portabilité des numéros
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Indiquez si vous souhaitez transférer vos numéros actuels vers Simplicom. Des informations complémentaires seront nécessaires pour lancer la demande.
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Portabilité des numéros
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Indiquez si vous souhaitez transférer vos numéros actuels vers Simplicom. Des informations complémentaires seront nécessaires pour lancer la demande.
+          </p>
+
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Souhaitez-vous effectuer une portabilité de vos numéros ?*
             </p>
-          </div>
-
-          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
-            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
-              Souhaitez-vous effectuer une portabilité de vos numéros ? *
-            </legend>
             <div className="mt-4 space-y-3">
               <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                 <input
@@ -826,7 +947,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 </span>
               </label>
             </div>
-          </fieldset>
+          </div>
 
           {needsPortabilityDetails && (
             <div className="mt-4 space-y-4 rounded-lg border border-gray-200 p-4 bg-gray-50">
@@ -936,22 +1057,40 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 >
                   Numéros à porter (un par ligne) *
                 </label>
-                <textarea
-                  id="portability_numbers"
-                  name="portability_numbers"
-                  required
-                  rows={4}
-                  value={formData.portability_numbers}
-                  onChange={handleFieldChange}
-                  className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
-                  disabled={isReadOnly}
-                />
+                {formData.portability_lines_count && parseInt(formData.portability_lines_count, 10) > 0 ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: parseInt(formData.portability_lines_count, 10) || 0 }, (_, index) => (
+                      <div key={`portability-number-${index}`}>
+                        <label
+                          htmlFor={`portability_number_${index}`}
+                          className="block text-xs font-medium text-gray-600 mb-1"
+                        >
+                          Numéro {index + 1} *
+                        </label>
+                        <input
+                          id={`portability_number_${index}`}
+                          type="tel"
+                          required
+                          value={formData.portability_numbers[index] || ''}
+                          onChange={(e) => handlePortabilityNumberChange(index, e.target.value)}
+                          className={`mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors ${inputDisabledClass}`}
+                          placeholder={`Entrez le numéro ${index + 1}`}
+                          disabled={isReadOnly}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-sm text-gray-500 text-center">
+                    Veuillez d&apos;abord indiquer le nombre de lignes à porter ci-dessus.
+                  </div>
+                )}
               </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Lettre d&apos;autorisation signée (PDF)
+                  Lettre d&apos;autorisation signée (PDF) *
                 </label>
                 <input
                   type="file"
@@ -974,22 +1113,61 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   </p>
                 )}
                 {formData.portability_authorization_letter && (
-                  <p className="mt-1 text-xs text-gray-600">
-                    Document enregistré :{' '}
-                    <a
-                      href={formData.portability_authorization_letter}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-600 underline"
-                    >
-                      ouvrir / télécharger
-                    </a>
-                  </p>
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-xs text-gray-700 mb-2">
+                      ✓ Document téléversé avec succès
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={formData.portability_authorization_letter}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                      >
+                        Ouvrir / Télécharger
+                      </a>
+                      {!isReadOnly && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.createElement('input')
+                              input.type = 'file'
+                              input.accept = 'application/pdf'
+                              input.onchange = (e) => {
+                                const target = e.target as HTMLInputElement
+                                void handlePortabilityDocumentUpload('authorization_letter', target.files)
+                              }
+                              input.click()
+                            }}
+                            className="text-xs text-blue-600 underline hover:text-blue-800"
+                          >
+                            Remplacer
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                portability_authorization_letter: '',
+                              }))
+                              setPortabilityUploadStatus(prev => ({ ...prev, authorization_letter: 'idle' }))
+                            }}
+                            className="text-xs text-red-600 underline hover:text-red-800"
+                          >
+                            Supprimer
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Dernière facture opérateur (PDF)
+                  Dernière facture opérateur (PDF) *
                 </label>
                 <input
                   type="file"
@@ -1010,20 +1188,139 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   </p>
                 )}
                 {formData.portability_last_invoice && (
-                  <p className="mt-1 text-xs text-gray-600">
-                    Document enregistré :{' '}
-                    <a
-                      href={formData.portability_last_invoice}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-600 underline"
-                    >
-                      ouvrir / télécharger
-                    </a>
-                  </p>
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-xs text-gray-700 mb-2">
+                      ✓ Document téléversé avec succès
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={formData.portability_last_invoice}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                      >
+                        Ouvrir / Télécharger
+                      </a>
+                      {!isReadOnly && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.createElement('input')
+                              input.type = 'file'
+                              input.accept = 'application/pdf'
+                              input.onchange = (e) => {
+                                const target = e.target as HTMLInputElement
+                                void handlePortabilityDocumentUpload('last_invoice', target.files)
+                              }
+                              input.click()
+                            }}
+                            className="text-xs text-blue-600 underline hover:text-blue-800"
+                          >
+                            Remplacer
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                portability_last_invoice: '',
+                              }))
+                              setPortabilityUploadStatus(prev => ({ ...prev, last_invoice: 'idle' }))
+                            }}
+                            className="text-xs text-red-600 underline hover:text-red-800"
+                          >
+                            Supprimer
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
+
+            {hasEightxxNumber && needsPortabilityDetails && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Resp Org form (PDF) {hasEightxxNumber ? '*' : ''}
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={event => {
+                    void handlePortabilityDocumentUpload('eightxx_document', event.target.files)
+                    if (event.target) event.target.value = ''
+                  }}
+                  className={`mt-1 block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-indigo-500 focus:outline-none ${inputDisabledClass}`}
+                  disabled={
+                    isReadOnly || portabilityUploadStatus.eightxx_document === 'loading'
+                  }
+                />
+                {portabilityUploadStatus.eightxx_document === 'loading' && (
+                  <p className="mt-1 text-xs text-gray-500">Téléversement en cours...</p>
+                )}
+                {portabilityUploadStatus.eightxx_document === 'error' && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {portabilityUploadError.eightxx_document}
+                  </p>
+                )}
+                {formData.portability_eightxx_document && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-xs text-gray-700 mb-2">
+                      ✓ Document téléversé avec succès
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={formData.portability_eightxx_document}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                      >
+                        Ouvrir / Télécharger
+                      </a>
+                      {!isReadOnly && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.createElement('input')
+                              input.type = 'file'
+                              input.accept = 'application/pdf'
+                              input.onchange = (e) => {
+                                const target = e.target as HTMLInputElement
+                                void handlePortabilityDocumentUpload('eightxx_document', target.files)
+                              }
+                              input.click()
+                            }}
+                            className="text-xs text-blue-600 underline hover:text-blue-800"
+                          >
+                            Remplacer
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                portability_eightxx_document: '',
+                              }))
+                              setPortabilityUploadStatus(prev => ({ ...prev, eightxx_document: 'idle' }))
+                            }}
+                            className="text-xs text-red-600 underline hover:text-red-800"
+                          >
+                            Supprimer
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {!isReadOnly && needsPortabilityDetails && (
               <p className="text-xs text-gray-500">
@@ -1034,20 +1331,16 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           )}
         </section>
-        )}
 
-        {(formData.emergency_service_address || formData.outgoing_display_name) && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Adresses de service
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Informations nécessaires pour les services d'urgence et l'affichage des appels sortants.
-            </p>
-          </div>
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Adresses de service
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Informations nécessaires pour les services d'urgence et l'affichage des appels sortants.
+          </p>
 
-          <div className="mt-6 space-y-6 px-4">
+          <div className="space-y-6">
             <div>
               <label
                 htmlFor="emergency_service_address"
@@ -1089,23 +1382,19 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           </div>
         </section>
-        )}
 
-        {formData.ip_phone_choice && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Téléphones de bureau IP
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Indiquez votre stratégie pour les appareils téléphoniques.
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Téléphones de bureau IP
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Indiquez votre stratégie pour les appareils téléphoniques.
+          </p>
+
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Allez-vous conserver vos téléphones IP ou acheter de nouveaux appareils ?*
             </p>
-          </div>
-
-          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
-            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
-              Allez-vous conserver vos téléphones IP ou acheter de nouveaux appareils ? *
-            </legend>
             <div className="space-y-2">
               <label className="flex items-center space-x-3">
                 <input
@@ -1153,22 +1442,18 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 </span>
               </label>
             </div>
-          </fieldset>
-        </section>
-        )}
-
-        {formData.posts_count > 0 && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Configuration des postes téléphoniques
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Sélectionnez les options à activer pour chaque poste. Vous pouvez renommer les postes si nécessaire.
-            </p>
           </div>
+        </section>
 
-          <div className="mt-6 px-4">
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Configuration des postes téléphoniques
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Sélectionnez les options à activer pour chaque poste. Vous pouvez renommer les postes si nécessaire.
+          </p>
+
+          <div>
             <label
               htmlFor="posts_count"
               className="block text-sm font-semibold text-gray-700 mb-2"
@@ -1277,20 +1562,16 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             ))}
           </div>
         </section>
-        )}
 
-        {(formData.collaborators_identification || formData.collaborators_contacts) && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Informations sur les collaborateurs
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Renseignez les informations sur les collaborateurs et leurs extensions.
-            </p>
-          </div>
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Informations sur les collaborateurs
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Renseignez les informations sur les collaborateurs et leurs extensions.
+          </p>
 
-          <div className="mt-6 space-y-6 px-4">
+          <div className="space-y-6">
             <div>
               <label
                 htmlFor="collaborators_identification"
@@ -1330,23 +1611,19 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             </div>
           </div>
         </section>
-        )}
 
-        {formData.include_company_menu && formData.include_company_menu !== 'none' && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Menu d&apos;entreprise
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Configurez le menu d'entreprise pour vos appels entrants.
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Menu d&apos;entreprise
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Configurez le menu d'entreprise pour vos appels entrants.
+          </p>
+
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Souhaitez-vous intégrer un menu d&apos;entreprise ?*
             </p>
-          </div>
-
-          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
-            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
-              Souhaitez-vous intégrer un menu d&apos;entreprise ? *
-            </legend>
             <div className="space-y-2">
               <label className="flex items-center space-x-3">
                 <input
@@ -1409,7 +1686,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 </span>
               </label>
             </div>
-          </fieldset>
+          </div>
 
           {(showFrenchMenuScript || showEnglishMenuScript) && (
             <div className="mt-4 space-y-4">
@@ -1460,22 +1737,16 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
           )}
         </section>
 
-        {showRecordingSection && (
-          <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-            <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-              <h3 className="text-xl font-bold text-gray-900">
-                Enregistrement professionnel
-              </h3>
-              <p className="mt-3 text-sm text-gray-600">
-                Sélectionnez l&apos;option désirée pour l&apos;enregistrement de votre menu d&apos;entreprise.
-              </p>
-            </div>
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Enregistrement professionnel
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Sélectionnez l&apos;option désirée pour l&apos;enregistrement de votre menu d&apos;entreprise.
+          </p>
 
-            <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
-              <legend className="sr-only">
-                Enregistrement professionnel du menu
-              </legend>
-              <div className="space-y-2">
+          <div className="mb-6">
+            <div className="space-y-2">
                 <label className="flex items-center space-x-3">
                   <input
                     type="radio"
@@ -1522,25 +1793,18 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                   </span>
                 </label>
               </div>
-            </fieldset>
+          </div>
 
             {formData.professional_recording === 'self' && (
               <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm text-gray-600">
                   Téléversez vos fichiers MP3. Vous pouvez fournir uniquement la version française ou anglaise si nécessaire.
                 </p>
-                <div
-                  className={
-                    showFrenchRecordingUpload && showEnglishRecordingUpload
-                      ? 'grid gap-4 sm:grid-cols-2'
-                      : 'grid gap-4'
-                  }
-                >
-                  {showFrenchRecordingUpload && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Fichier MP3 – version française
-                      </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Fichier MP3 – version française {showFrenchMenuScript ? '*' : '(optionnel)'}
+                    </label>
                       <input
                         type="file"
                         accept="audio/mpeg,audio/mp3"
@@ -1558,77 +1822,148 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                         <p className="mt-1 text-xs text-red-600">{recordingUploadError.french}</p>
                       )}
                       {formData.french_recording_url && (
-                        <p className="mt-1 text-xs text-gray-600">
-                          Document enregistré :{' '}
-                          <a
-                            href={formData.french_recording_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-indigo-600 underline"
-                          >
-                            ouvrir / télécharger
-                          </a>
-                        </p>
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                          <p className="text-xs text-gray-700 mb-2">
+                            ✓ Fichier MP3 français téléversé avec succès
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={formData.french_recording_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                            >
+                              Ouvrir / Télécharger
+                            </a>
+                            {!isReadOnly && (
+                              <>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.createElement('input')
+                                    input.type = 'file'
+                                    input.accept = 'audio/mpeg,audio/mp3'
+                                    input.onchange = (e) => {
+                                      const target = e.target as HTMLInputElement
+                                      void handleRecordingFileChange('french', target.files)
+                                    }
+                                    input.click()
+                                  }}
+                                  className="text-xs text-blue-600 underline hover:text-blue-800"
+                                >
+                                  Remplacer
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      french_recording_url: '',
+                                    }))
+                                    setRecordingUploadStatus(prev => ({ ...prev, french: 'idle' }))
+                                  }}
+                                  className="text-xs text-red-600 underline hover:text-red-800"
+                                >
+                                  Supprimer
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  )}
-                  {showEnglishRecordingUpload && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Fichier MP3 – version anglaise
-                      </label>
-                      <input
-                        type="file"
-                        accept="audio/mpeg,audio/mp3"
-                        onChange={event => {
-                          void handleRecordingFileChange('english', event.target.files)
-                          if (event.target) event.target.value = ''
-                        }}
-                        className={`mt-1 block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-indigo-500 focus:outline-none ${inputDisabledClass}`}
-                        disabled={isReadOnly || recordingUploadStatus.english === 'loading'}
-                      />
-                      {recordingUploadStatus.english === 'loading' && (
-                        <p className="mt-1 text-xs text-gray-500">Téléversement en cours...</p>
-                      )}
-                      {recordingUploadStatus.english === 'error' && (
-                        <p className="mt-1 text-xs text-red-600">{recordingUploadError.english}</p>
-                      )}
-                      {formData.english_recording_url && (
-                        <p className="mt-1 text-xs text-gray-600">
-                          Document enregistré :{' '}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Fichier MP3 – version anglaise {showEnglishMenuScript ? '*' : '(optionnel)'}
+                    </label>
+                    <input
+                      type="file"
+                      accept="audio/mpeg,audio/mp3"
+                      onChange={event => {
+                        void handleRecordingFileChange('english', event.target.files)
+                        if (event.target) event.target.value = ''
+                      }}
+                      className={`mt-1 block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-indigo-500 focus:outline-none ${inputDisabledClass}`}
+                      disabled={isReadOnly || recordingUploadStatus.english === 'loading'}
+                    />
+                    {recordingUploadStatus.english === 'loading' && (
+                      <p className="mt-1 text-xs text-gray-500">Téléversement en cours...</p>
+                    )}
+                    {recordingUploadStatus.english === 'error' && (
+                      <p className="mt-1 text-xs text-red-600">{recordingUploadError.english}</p>
+                    )}
+                    {formData.english_recording_url && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                        <p className="text-xs text-gray-700 mb-2">
+                          ✓ Fichier MP3 anglais téléversé avec succès
+                        </p>
+                        <div className="flex items-center gap-2">
                           <a
                             href={formData.english_recording_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-indigo-600 underline"
+                            className="text-xs text-indigo-600 underline hover:text-indigo-800"
                           >
-                            ouvrir / télécharger
+                            Ouvrir / Télécharger
                           </a>
-                        </p>
-                      )}
-                    </div>
-                  )}
+                          {!isReadOnly && (
+                            <>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const input = document.createElement('input')
+                                  input.type = 'file'
+                                  input.accept = 'audio/mpeg,audio/mp3'
+                                  input.onchange = (e) => {
+                                    const target = e.target as HTMLInputElement
+                                    void handleRecordingFileChange('english', target.files)
+                                  }
+                                  input.click()
+                                }}
+                                className="text-xs text-blue-600 underline hover:text-blue-800"
+                              >
+                                Remplacer
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    english_recording_url: '',
+                                  }))
+                                  setRecordingUploadStatus(prev => ({ ...prev, english: 'idle' }))
+                                }}
+                                className="text-xs text-red-600 underline hover:text-red-800"
+                              >
+                                Supprimer
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
           </section>
-        )}
 
-        {formData.notify_admin && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Notification de l&apos;administrateur
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Vous pouvez demander à ce qu&apos;un administrateur reçoive une copie de votre soumission par courriel.
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Notification de l&apos;administrateur
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Vous pouvez demander à ce qu&apos;un administrateur reçoive une copie de votre soumission par courriel.
+          </p>
+
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Souhaitez-vous notifier un administrateur ?*
             </p>
-          </div>
-
-          <fieldset className="mt-6 border-2 border-gray-300 rounded-lg p-4 bg-white mx-4">
-            <legend className="text-sm font-semibold text-gray-700 px-2 text-center">
-              Souhaitez-vous notifier un administrateur ? *
-            </legend>
             <div className="space-y-2">
               <label className="flex items-center space-x-3">
                 <input
@@ -1661,7 +1996,7 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
                 </span>
               </label>
             </div>
-          </fieldset>
+          </div>
 
           {notifyAdminSelected && (
             <div className="mt-4">
@@ -1686,21 +2021,17 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
               </p>
             </div>
           )}
-        </section>
-        )}
+          </section>
 
-        {formData.additional_notes && (
-        <section className="border-2 border-gray-200 rounded-lg p-8 bg-gray-50/50 mx-auto max-w-full">
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300 px-4">
-            <h3 className="text-xl font-bold text-gray-900">
-              Notes et informations complémentaires
-            </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Ajoutez toute information supplémentaire que vous souhaitez communiquer.
-            </p>
-          </div>
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Notes et informations complémentaires
+          </h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Ajoutez toute information supplémentaire que vous souhaitez communiquer.
+          </p>
 
-          <div className="mt-6 px-4">
+          <div>
             <label
               htmlFor="additional_notes"
               className="block text-sm font-semibold text-gray-700 mb-2"
@@ -1719,9 +2050,8 @@ export default function ClientForm({ link, disabled = false }: ClientFormProps) 
             />
           </div>
         </section>
-        )}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mt-8 pt-6 border-t-2 border-gray-200">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mt-6 pt-6 border-t border-gray-200">
           <p className="text-sm text-gray-600 text-center sm:text-left">
             Merci de vérifier vos informations avant l&apos;envoi.
           </p>

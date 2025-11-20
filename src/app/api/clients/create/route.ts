@@ -171,6 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const isAlreadyRegistered =
         createUserError instanceof AuthApiError &&
         createUserError.status === 422 &&
+        createUserError.message &&
         typeof createUserError.message === 'string' &&
         createUserError.message.toLowerCase().includes('already registered')
 

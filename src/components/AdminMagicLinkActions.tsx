@@ -36,8 +36,9 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
   const [actionsOpen, setActionsOpen] = useState(false)
   const [successLink, setSuccessLink] = useState<MagicLinkInfo | null>(null)
   const [revokeLoading, setRevokeLoading] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [downloadingFiles, setDownloadingFiles] = useState(false)
   const [error, setError] = useState('')
 
   const handleSuccess = (link: MagicLinkInfo): void => {
@@ -76,29 +77,6 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
     }
   }
 
-  const handleDeleteClient = async (): Promise<void> => {
-    const confirmed = window.confirm(
-      'Supprimer ce client supprimera aussi ses liens magiques et ses soumissions. Confirmez-vous cette action ?'
-    )
-    if (!confirmed) return
-    setError('')
-    setDeleteLoading(true)
-    try {
-      const response = await fetch(`/api/admin/clients/${client.id}`, {
-        method: 'DELETE',
-      })
-      const json = await response.json().catch(() => ({}))
-      if (!response.ok || json.success === false) {
-        setError(json.error ?? 'Impossible de supprimer ce client.')
-      } else {
-        window.location.reload()
-      }
-    } catch (err) {
-      setError('Erreur réseau lors de la suppression du client.')
-    } finally {
-      setDeleteLoading(false)
-    }
-  }
 
   const handleResetSubmission = async (): Promise<void> => {
     if (!client.latest_submission_id || !usedLink) {
@@ -130,8 +108,139 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
     }
   }
 
+  const handleResendForm = async (): Promise<void> => {
+    if (!client.latest_submission_id || !usedLink) {
+      setError('Aucun formulaire à renvoyer pour ce client.')
+      return
+    }
+
+    setError('')
+    setResendLoading(true)
+    try {
+      const response = await fetch('/api/admin/forms/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submission_id: client.latest_submission_id,
+          magic_link_id: usedLink.id,
+        }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok || json.success === false) {
+        setError(json.error ?? 'Impossible de renvoyer le formulaire.')
+        setResendLoading(false)
+        return
+      }
+
+      // Afficher le succès avec le nouveau lien
+      if (json.url) {
+        setSuccessLink({
+          url: json.url,
+          token: json.link?.token || '',
+          clientId: client.id,
+        })
+        setShowModal(true)
+      } else {
+        // Recharger la page pour mettre à jour l'état
+        window.location.reload()
+      }
+      setResendLoading(false)
+    } catch (err) {
+      setError('Erreur réseau lors du renvoi du formulaire.')
+      setResendLoading(false)
+    }
+  }
+
   const handleOpenModal = (): void => {
     setShowModal(true)
+  }
+
+  const handleDownloadAllFiles = async (): Promise<void> => {
+    if (!client.latest_submission_data) {
+      setError('Aucun fichier disponible pour téléchargement.')
+      return
+    }
+
+    setDownloadingFiles(true)
+    setError('')
+
+    try {
+      const fileData = client.latest_submission_data as {
+        portability_authorization_letter?: string
+        portability_last_invoice?: string
+        french_recording_url?: string
+        english_recording_url?: string
+        [key: string]: any
+      }
+
+      const files: Array<{ url: string; filename: string }> = []
+
+      // Ajouter les fichiers PDF
+      if (fileData.portability_authorization_letter) {
+        const url = fileData.portability_authorization_letter
+        const filename = `Lettre_autorisation_${client.full_name.replace(/\s+/g, '_')}.pdf`
+        files.push({ url, filename })
+      }
+
+      if (fileData.portability_last_invoice) {
+        const url = fileData.portability_last_invoice
+        const filename = `Derniere_facture_${client.full_name.replace(/\s+/g, '_')}.pdf`
+        files.push({ url, filename })
+      }
+
+      // Ajouter les fichiers MP3
+      if (fileData.french_recording_url) {
+        const url = fileData.french_recording_url
+        const filename = `Enregistrement_francais_${client.full_name.replace(/\s+/g, '_')}.mp3`
+        files.push({ url, filename })
+      }
+
+      if (fileData.english_recording_url) {
+        const url = fileData.english_recording_url
+        const filename = `Enregistrement_anglais_${client.full_name.replace(/\s+/g, '_')}.mp3`
+        files.push({ url, filename })
+      }
+
+      if (files.length === 0) {
+        setError('Aucun fichier disponible pour téléchargement.')
+        setDownloadingFiles(false)
+        return
+      }
+
+      // Télécharger chaque fichier via l'API
+      for (const file of files) {
+        try {
+          // Utiliser l'API pour télécharger avec les bonnes permissions
+          const response = await fetch(`/api/files/download?url=${encodeURIComponent(file.url)}`)
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            console.error(`Erreur lors du téléchargement de ${file.filename}:`, errorData.error || response.statusText)
+            continue
+          }
+
+          const blob = await response.blob()
+          const downloadUrl = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = downloadUrl
+          link.download = file.filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(downloadUrl)
+
+          // Petit délai entre les téléchargements pour éviter les problèmes de navigateur
+          await new Promise(resolve => setTimeout(resolve, 300))
+        } catch (fileError) {
+          console.error(`Erreur lors du téléchargement de ${file.filename}:`, fileError)
+        }
+      }
+    } catch (err) {
+      console.error('Erreur lors du téléchargement des fichiers:', err)
+      setError('Erreur lors du téléchargement des fichiers.')
+    } finally {
+      setDownloadingFiles(false)
+    }
   }
 
   return (
@@ -139,32 +248,49 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
       <button
         type="button"
         onClick={() => setActionsOpen(previous => !previous)}
-        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-[#1D3B4E] hover:bg-[#132838] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1D3B4E]"
+        className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40 transition-all duration-200"
       >
         {actionsOpen ? 'Masquer les actions' : 'Actions'}
       </button>
 
       {actionsOpen && (
-        <div className="mt-2 flex flex-col gap-2 rounded-md border border-[#00C3D9]/20 bg-white/70 p-3 shadow-sm">
+        <div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#00C3D9]/20 bg-white/90 p-3 shadow-md">
           {hasSubmission ? (
             <>
               <a
-                href={`/api/forms/download?submission_id=${client.latest_submission_id}`}
+                href={`/api/forms/download?submissionId=${client.latest_submission_id}`}
                 target="_blank"
-                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40 transition-all duration-200"
               >
-                📄 Télécharger PDF formulaire
+                Télécharger PDF formulaire
               </a>
               <button
                 type="button"
-                onClick={() => setShowFilesModal(true)}
-                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                onClick={handleDownloadAllFiles}
+                disabled={downloadingFiles || !client.latest_submission_data}
+                className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
+                  downloadingFiles || !client.latest_submission_data
+                    ? 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
+                    : 'bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40'
+                }`}
               >
-                📁 Voir les fichiers PDF & MP3
+                {downloadingFiles ? 'Téléchargement...' : 'Télécharger les fichiers PDF & MP3'}
+              </button>
+              <button
+                type="button"
+                onClick={handleResendForm}
+                disabled={resendLoading || !usedLink}
+                className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
+                  resendLoading || !usedLink
+                    ? 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
+                    : 'bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40'
+                }`}
+              >
+                {resendLoading ? 'Envoi en cours...' : 'Renvoyer le formulaire'}
               </button>
             </>
           ) : (
-            <span className="inline-flex items-center justify-center px-4 py-2 border border-dashed border-[#00C3D9]/40 text-xs font-medium rounded-md text-[#1D3B4E]/60">
+            <span className="inline-flex items-center justify-center px-3 py-1.5 border border-dashed border-[#00C3D9]/40 text-xs font-medium rounded-lg text-[#1D3B4E]/60 bg-[#00C3D9]/5">
               Aucun formulaire disponible
             </span>
           )}
@@ -173,10 +299,10 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
             type="button"
             onClick={handleOpenModal}
             disabled={creationLocked}
-            className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
+            className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
               creationLocked
                 ? 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
-                : 'bg-[#00C3D9] text-white hover:bg-[#00C3D9]/80 focus:ring-[#00C3D9]'
+                : 'bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40'
             }`}
           >
             {creationLocked ? (pendingLink ? 'Lien en attente' : 'Lien déjà utilisé') : 'Envoyer le magicLink'}
@@ -186,9 +312,9 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
             type="button"
             onClick={handleResetSubmission}
             disabled={!usedLink || !client.latest_submission_id || resetLoading}
-            className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
+            className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
               usedLink && client.latest_submission_id && !resetLoading
-                ? 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500'
+                ? 'bg-gradient-to-r from-[#00C3D9] to-[#00A8BA] text-white shadow-md shadow-[#00C3D9]/30 hover:shadow-lg hover:shadow-[#00C3D9]/40'
                 : 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
             }`}
           >
@@ -199,26 +325,13 @@ export default function AdminMagicLinkActions({ client }: AdminMagicLinkActionsP
             type="button"
             onClick={handleRevoke}
             disabled={!pendingLink || revokeLoading}
-            className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
+            className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
               pendingLink && !revokeLoading
-                ? 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500'
+                ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md shadow-red-500/30 hover:shadow-lg hover:shadow-red-500/40'
                 : 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
             }`}
           >
             {revokeLoading ? 'Suppression...' : 'Supprimer le magicLink'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDeleteClient}
-            disabled={deleteLoading}
-            className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
-              deleteLoading
-                ? 'bg-gray-300 cursor-not-allowed opacity-70 text-[#1D3B4E]/60'
-                : 'bg-[#1D3B4E] text-white hover:bg-[#132838] focus:ring-[#1D3B4E]'
-            }`}
-          >
-            {deleteLoading ? 'Suppression...' : 'Supprimer le client'}
           </button>
 
           {(creationLocked || pendingLink || usedLink) && (

@@ -48,6 +48,7 @@ export interface Database {
           id: string
           status: 'active' | 'inactive' | 'suspended'
           phone: string | null
+          full_name: string | null
           created_at: string
           updated_at: string
         }
@@ -55,6 +56,7 @@ export interface Database {
           id?: string
           status?: 'active' | 'inactive' | 'suspended'
           phone?: string | null
+          full_name?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -62,6 +64,7 @@ export interface Database {
           id?: string
           status?: 'active' | 'inactive' | 'suspended'
           phone?: string | null
+          full_name?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -208,6 +211,61 @@ export interface Database {
           }
         ]
       }
+      client_todos: {
+        Row: {
+          id: string
+          client_id: string
+          title: string
+          description: string | null
+          completed: boolean
+          priority: 'low' | 'medium' | 'high' | null
+          due_date: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          title: string
+          description?: string | null
+          completed?: boolean
+          priority?: 'low' | 'medium' | 'high' | null
+          due_date?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          title?: string
+          description?: string | null
+          completed?: boolean
+          priority?: 'low' | 'medium' | 'high' | null
+          due_date?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_todos_client_id_fkey"
+            columns: ["client_id"]
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_todos_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -234,6 +292,7 @@ export interface Agent {
   id: string
   status: 'active' | 'inactive' | 'suspended'
   phone: string | null
+  full_name: string | null
   created_at: string
   updated_at: string
 }
@@ -276,4 +335,18 @@ export interface FormSubmission {
   user_agent: string | null
   submitted_at: string
   processed_at: string | null
+}
+
+export interface ClientTodo {
+  id: string
+  client_id: string
+  title: string
+  description: string | null
+  completed: boolean
+  priority: 'low' | 'medium' | 'high' | null
+  due_date: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+  completed_at: string | null
 }

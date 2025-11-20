@@ -2,30 +2,31 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import PricingForm from '@/components/forms/pricing-form'
-
-interface Client {
-  id: string
-  full_name: string
-  email: string
-  phone: string | null
-  company: string | null
-  notes: string | null
-}
-
-interface MagicLink {
-  id: string
-  token: string
-  status: 'pending' | 'used' | 'expired' | 'revoked'
-  created_at: string
-  expires_at: string | null
-  used_at: string | null
-}
+import AdminMagicLinkActions from '@/components/AdminMagicLinkActions'
+import { ClientTodoList } from '@/components/admin/ClientTodoList'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Edit, Archive, CheckCircle, XCircle, Ban } from 'lucide-react'
+import type { Client, MagicLink } from '@/lib/types/database.types'
 
 interface ClientDetailClientProps {
-  client: Client
+  client: Client & {
+    status?: 'active' | 'inactive' | 'archived'
+    magic_links?: MagicLink[]
+    latest_submission_id?: string | null
+    latest_submission_at?: string | null
+    latest_submission_data?: any
+  }
   magicLinks: MagicLink[]
-  latestSubmission: { id: string; submitted_at: string | null } | null
+  latestSubmission: { id: string; submitted_at: string | null; data?: any } | null
 }
 
 interface UserSession {
@@ -46,11 +47,14 @@ async function fetchCurrentUserRole(): Promise<UserSession | null> {
 }
 
 export default function ClientDetailClient({ client, magicLinks, latestSubmission }: ClientDetailClientProps) {
+  const router = useRouter()
   const [showModal, setShowModal] = useState(false)
   const [userRole, setUserRole] = useState<UserSession['role'] | null>(null)
   const [revokeLoading, setRevokeLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [globalError, setGlobalError] = useState('')
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [archivingClient, setArchivingClient] = useState(false)
 
   useEffect(() => {
     void (async () => {
@@ -176,52 +180,170 @@ export default function ClientDetailClient({ client, magicLinks, latestSubmissio
     }
   }
 
+  const handleStatusChange = async (newStatus: Client['status']) => {
+    if (!client.status) return
+    setUpdatingStatus(true)
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (response.ok) {
+        router.refresh()
+      } else {
+        const error = await response.json()
+        setGlobalError(`Erreur: ${error.error || 'Impossible de mettre à jour le statut'}`)
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+      setGlobalError('Erreur lors de la mise à jour du statut')
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
+  const handleArchive = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir archiver ce client ?')) {
+      return
+    }
+
+    setArchivingClient(true)
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/archive`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert('Client archivé avec succès')
+        router.refresh()
+      } else {
+        setGlobalError(`Erreur: ${data.error || 'Impossible d\'archiver le client'}`)
+      }
+    } catch (error) {
+      console.error('Error archiving client:', error)
+      setGlobalError('Erreur lors de l\'archivage du client')
+    } finally {
+      setArchivingClient(false)
+    }
+  }
+
+  const getStatusBadge = (status: Client['status']) => {
+    if (!status) return null
+    const config: Record<Client['status'], { color: 'green' | 'yellow' | 'gray', label: string }> = {
+      active: {
+        color: 'green',
+        label: 'Actif'
+      },
+      inactive: {
+        color: 'yellow',
+        label: 'Inactif'
+      },
+      archived: {
+        color: 'gray',
+        label: 'Archivé'
+      },
+    }
+
+    const { color, label } = config[status]
+    return (
+      <Badge color={color} variant="status">
+        {label}
+      </Badge>
+    )
+  }
+
+  // Préparer le client pour AdminMagicLinkActions
+  const clientForActions = useMemo(() => ({
+    ...client,
+    magic_links: magicLinks,
+    latest_submission_id: latestSubmission?.id || null,
+    latest_submission_at: latestSubmission?.submitted_at || null,
+    latest_submission_data: latestSubmission?.data || null,
+  }), [client, magicLinks, latestSubmission])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#00C3D9]/5 via-white to-[#FF8A00]/5">
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="glass shadow-lg rounded-xl p-6 mb-8">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold text-[#1D3B4E]">
-                {client.full_name}
-              </h1>
-              <p className="mt-2 text-[#1D3B4E]/70">
-                {client.company && `${client.company} • `}{client.email}
-              </p>
+    <div className="min-h-screen bg-gradient-soft">
+      <div className="max-w-7xl mx-auto py-16 px-6 sm:px-8 lg:px-12">
+        {/* Header Premium */}
+        <div className="card-glass mb-12 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+                {client.full_name?.charAt(0).toUpperCase() || 'C'}
+              </div>
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-bold text-[#1D3B4E] mb-2">
+                  {client.full_name}
+                </h1>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-[#1D3B4E]/70">
+                  {client.company && (
+                    <span className="flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      {client.company}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                    </svg>
+                    {client.email}
+                  </span>
+                </div>
+              </div>
             </div>
             <Link
               href="/agent/dashboard"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-[#1D3B4E] bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
+              className="btn-secondary inline-flex items-center gap-2 shrink-0"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
               Retour au Dashboard
             </Link>
           </div>
         </div>
 
         {/* Informations client */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div className="glass shadow-lg rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-[#1D3B4E] mb-4">Informations Client</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-[#1D3B4E]/70">Nom complet</label>
-                <p className="text-[#1D3B4E]">{client.full_name}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-12">
+          <div className="card-glass animate-slide-in">
+            <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[#00C3D9]/10">
+              <div className="w-10 h-10 rounded-xl bg-gradient-primary/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-[#00C3D9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
               </div>
-              <div>
-                <label className="text-sm font-medium text-[#1D3B4E]/70">Email</label>
-                <p className="text-[#1D3B4E]">{client.email}</p>
+              <h2 className="text-xl font-bold text-[#1D3B4E]">Informations Client</h2>
+            </div>
+            <div className="space-y-5">
+              <div className="p-5 rounded-xl bg-[#00C3D9]/5 border border-[#00C3D9]/10">
+                <label className="text-xs font-semibold text-[#1D3B4E]/60 uppercase tracking-wide mb-1 block">Nom complet</label>
+                <p className="text-[#1D3B4E] font-semibold">{client.full_name}</p>
+              </div>
+              <div className="p-4 rounded-xl bg-[#00C3D9]/5 border border-[#00C3D9]/10">
+                <label className="text-xs font-semibold text-[#1D3B4E]/60 uppercase tracking-wide mb-1 block">Email</label>
+                <p className="text-[#1D3B4E] font-semibold">{client.email}</p>
               </div>
               {client.phone && (
-                <div>
-                  <label className="text-sm font-medium text-[#1D3B4E]/70">Téléphone</label>
-                  <p className="text-[#1D3B4E]">{client.phone}</p>
+                <div className="p-4 rounded-xl bg-[#00C3D9]/5 border border-[#00C3D9]/10">
+                  <label className="text-xs font-semibold text-[#1D3B4E]/60 uppercase tracking-wide mb-1 block">Téléphone</label>
+                  <p className="text-[#1D3B4E] font-semibold">{client.phone}</p>
                 </div>
               )}
               {client.company && (
-                <div>
-                  <label className="text-sm font-medium text-[#1D3B4E]/70">Entreprise</label>
-                  <p className="text-[#1D3B4E]">{client.company}</p>
+                <div className="p-4 rounded-xl bg-[#00C3D9]/5 border border-[#00C3D9]/10">
+                  <label className="text-xs font-semibold text-[#1D3B4E]/60 uppercase tracking-wide mb-1 block">Entreprise</label>
+                  <p className="text-[#1D3B4E] font-semibold">{client.company}</p>
                 </div>
               )}
               {agentFormDetails && (
@@ -274,85 +396,83 @@ export default function ClientDetailClient({ client, magicLinks, latestSubmissio
           <div className="glass shadow-lg rounded-xl p-6">
             <h2 className="text-xl font-semibold text-[#1D3B4E] mb-4">Actions</h2>
             <div className="space-y-4">
-              <Link
-                href={`/agent/clients/${client.id}/edit`}
-                className="block w-full text-center px-4 py-2 border border-[#00C3D9]/30 text-sm font-medium rounded-md text-[#1D3B4E] bg-white hover:bg-[#00C3D9]/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C3D9] transition-colors"
-              >
-                Modifier le Client
-              </Link>
-
-            {latestSubmission ? (
-              <a
-                href={`/api/forms/download?submissionId=${latestSubmission.id}`}
-                className="block w-full text-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#1D3B4E] hover:bg-[#132838] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1D3B4E] transition-colors"
-              >
-                Télécharger le formulaire
-              </a>
-            ) : (
-              <span className="block w-full text-center px-4 py-2 border border-dashed border-[#1D3B4E]/40 text-sm font-medium rounded-md text-[#1D3B4E]/60">
-                Aucun formulaire disponible
-              </span>
-            )}
-            {latestSubmission?.submitted_at && (
-              <p className="text-xs text-[#1D3B4E]/60">
-                Dernière soumission : {new Date(latestSubmission.submitted_at).toLocaleString('fr-FR')}
-              </p>
-            )}
-
-              <button
-                onClick={handleCreateMagicLink}
-                disabled={roleLoading || !canManageMagicLinks || isCreationLocked}
-                className={`block w-full text-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
-                  !roleLoading && canManageMagicLinks && !isCreationLocked
-                    ? 'bg-[#00C3D9] hover:bg-[#00C3D9]/80 focus:ring-[#00C3D9]'
-                    : 'bg-gray-300 cursor-not-allowed opacity-70'
-                }`}
-              >
-                {roleLoading
-                  ? 'Chargement...'
-                  : hasPendingLink
-                    ? 'Lien magique déjà envoyé'
-                    : hasUsedLink
-                      ? 'Lien déjà utilisé'
-                      : 'Envoyer le lien magique'}
-              </button>
-
-              <button
-                onClick={handleRevokeMagicLink}
-                disabled={roleLoading || !canManageMagicLinks || !activeLink || revokeLoading}
-                className={`block w-full text-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
-                  !roleLoading && canManageMagicLinks && activeLink && !revokeLoading
-                    ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
-                    : 'bg-gray-300 cursor-not-allowed opacity-70'
-                }`}
-              >
-                {revokeLoading ? 'Suppression...' : 'Supprimer le lien magique'}
-              </button>
-
-              <button
-                onClick={handleDeleteClient}
-                disabled={roleLoading || !isAdmin || deleteLoading}
-                className={`block w-full text-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
-                  !roleLoading && isAdmin && !deleteLoading
-                    ? 'bg-[#1D3B4E] hover:bg-[#132838] focus:ring-[#1D3B4E]'
-                    : 'bg-gray-300 cursor-not-allowed opacity-70'
-                }`}
-              >
-                {deleteLoading ? 'Suppression du client...' : 'Supprimer le client'}
-              </button>
-
-              {(hasPendingLink || hasUsedLink) && (
-                <p className="text-xs text-[#1D3B4E]/60 border border-[#00C3D9]/20 bg-[#00C3D9]/10 rounded-md px-3 py-2">
-                  {hasPendingLink
-                    ? 'Un lien est déjà en attente pour ce client. Révoquez-le pour en générer un nouveau.'
-                    : 'Un lien a déjà été utilisé pour ce client. Veuillez réinitialiser son accès si nécessaire.'}
-                </p>
+              {/* Statut du client */}
+              {client.status && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-[#1D3B4E]">Statut</label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        disabled={updatingStatus}
+                        className="cursor-pointer disabled:opacity-50"
+                      >
+                        {getStatusBadge(client.status)}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange('active')}
+                        disabled={client.status === 'active' || updatingStatus}
+                        className="flex items-center"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                        Actif
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange('inactive')}
+                        disabled={client.status === 'inactive' || updatingStatus}
+                        className="flex items-center"
+                      >
+                        <XCircle className="h-4 w-4 mr-2 text-yellow-600" />
+                        Inactif
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange('archived')}
+                        disabled={client.status === 'archived' || updatingStatus}
+                        className="flex items-center"
+                      >
+                        <Ban className="h-4 w-4 mr-2 text-gray-600" />
+                        Archivé
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
 
-              {!canManageMagicLinks && !roleLoading && (
-                <p className="text-sm text-[#1D3B4E]/70">
-                  Les actions d’envoi ou de révocation du lien magique sont réservées aux administrateurs ou agents autorisés.
-                </p>
+              {/* Actions rapides */}
+              <div className="flex flex-col gap-2">
+                {isAdmin && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="w-full justify-start"
+                    >
+                      <Link href={`/admin/clients/${client.id}/edit`}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Modifier le client
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleArchive}
+                      disabled={archivingClient || client.status === 'archived'}
+                      className="w-full justify-start text-destructive hover:text-destructive"
+                    >
+                      <Archive className="h-4 w-4 mr-2" />
+                      {archivingClient ? 'Archivage...' : 'Archiver le client'}
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Actions AdminMagicLinkActions */}
+              {isAdmin && (
+                <div className="pt-4 border-t border-[#00C3D9]/20">
+                  <AdminMagicLinkActions client={clientForActions} />
+                </div>
               )}
 
               {globalError && (
@@ -363,7 +483,7 @@ export default function ClientDetailClient({ client, magicLinks, latestSubmissio
         </div>
 
         {/* Liens magiques existants */}
-        <div className="glass shadow-lg rounded-xl p-6">
+        <div className="glass shadow-lg rounded-xl p-6 mb-6">
           <h2 className="text-xl font-semibold text-[#1D3B4E] mb-4">Liens Magiques</h2>
           {magicLinks && magicLinks.length > 0 ? (
             <div className="space-y-4">
@@ -424,6 +544,13 @@ export default function ClientDetailClient({ client, magicLinks, latestSubmissio
             <p className="text-[#1D3B4E]/70">Aucun lien magique créé pour ce client.</p>
           )}
         </div>
+
+        {/* Liste de tâches (Todos) */}
+        {isAdmin && (
+          <div className="glass shadow-lg rounded-xl p-6">
+            <ClientTodoList clientId={client.id} />
+          </div>
+        )}
       </div>
 
       {/* Modal pour créer un lien magique */}
